@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONPATH=/app
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - BUCKET_NAME=${BUCKET_NAME:-signatures}
+    volumes:
+      - ./attendance-backend:/app/attendance-backend
+    command: >
+      sh -c "poetry run uvicorn attendance_backend.app:app 
+             --host 0.0.0.0 
+             --port 5000 
+             --reload"
+    # Uncomment the following lines if you're using a local database
+    # depends_on:
+    #   - db
+    # environment:
+    #   - DATABASE_URL=postgresql://postgres:postgres@db:5432/attendance
+
+  # Uncomment this if you want to run a local PostgreSQL instance
+  # db:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #     - POSTGRES_DB=attendance
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data/
+  #   ports:
+  #     - "5432:5432"
+
+  # AI Signature Verification Service
+  signature-ai:
+    build:
+      context: ./services/signature-ai
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - HOST=0.0.0.0
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - AI_MODEL_PATH=/models/signature_embedding.onnx
+      - EMBED_DIM=512
+      - DEFAULT_THRESHOLD=0.35
+      - MIN_SAMPLES_FOR_TRAINING=3
+      - KNN_SEARCH_LIMIT=5
+    volumes:
+      # Mount models directory - in production, you would mount actual model files
+      - ./models:/models:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Uncomment this if you want to run the frontend in development mode
+  # frontend:
+  #   build:
+  #     context: ./attendance-frontend
+  #     dockerfile: Dockerfile.dev
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./attendance-frontend:/app
+  #     - /app/node_modules
+  #   environment:
+  #     - NODE_ENV=development
+  #     - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+  #     - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+  #   depends_on:
+  #     - backend
+
+# Uncomment if using local PostgreSQL
+# volumes:
+#   postgres_data:
