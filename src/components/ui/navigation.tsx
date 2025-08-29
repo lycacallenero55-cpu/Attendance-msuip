@@ -112,7 +112,7 @@ const DesktopNavigation = () => {
   const navItems = getNavItems(userRole);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
+    const fetchRole = async () => {
       // If we have cached role for the same user, don't refetch
       if (cachedUserRole && cachedUserId === user?.id) {
         setUserRole(cachedUserRole);
@@ -150,7 +150,7 @@ const DesktopNavigation = () => {
 
     // Only fetch role on initial mount or when user changes
     if (isInitialMount.current || cachedUserId !== user?.id) {
-      fetchUserRole();
+      fetchRole();
       isInitialMount.current = false;
     }
   }, [user?.id]); // Only depend on user ID, not the full user object
@@ -576,7 +576,7 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }, [isOpen]);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
+    const fetchRole = async () => {
       // If we have cached role for the same user, don't refetch
       if (cachedUserRole && cachedUserId === user?.id) {
         setUserRole(cachedUserRole);
@@ -614,7 +614,7 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
 
     // Only fetch role on initial mount or when user changes
     if (isInitialMount.current || cachedUserId !== user?.id) {
-      fetchUserRole();
+      fetchRole();
       isInitialMount.current = false;
     }
   }, [user?.id]); // Only depend on user ID, not the full user object

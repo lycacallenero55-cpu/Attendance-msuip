@@ -18,25 +18,45 @@ export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) =
   const location = useLocation();
 
   const baseNavItems = [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+    { 
+      icon: LayoutDashboard, 
+      label: "Dashboard", 
+      href: "/",
+      isActive: (path: string) => path === '/'
+    },
     { 
       icon: UserCheck, 
       label: "Attendance", 
       href: "/take-attendance",
       isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
     },
-    { icon: Users, label: "Students", href: "/students" },
+    { 
+      icon: Users, 
+      label: "Students", 
+      href: "/students",
+      isActive: (path: string) => path === '/students'
+    },
     { 
       icon: CalendarClock, 
       label: "Sessions", 
       href: "/schedule",
       isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
     },
-    { icon: FileText, label: "Reports", href: "/reports" },
+    { 
+      icon: FileText, 
+      label: "Reports", 
+      href: "/reports",
+      isActive: (path: string) => path === '/reports'
+    },
   ];
 
   const roleBasedItems = [
-    ...(['admin', 'instructor', 'staff'].includes(userRole) ? [{ icon: Book, label: "Subjects", href: "/subjects" }] : []),
+    ...(['admin', 'Instructor', 'SSG officer', 'ROTC admin', 'ROTC officer'].includes(userRole) ? [{
+      icon: Book, 
+      label: "Subjects", 
+      href: "/subjects",
+      isActive: (path: string) => path === '/subjects'
+    }] : []),
   ];
 
   const navItems = [...baseNavItems, ...roleBasedItems];

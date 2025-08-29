@@ -6,7 +6,7 @@ import { BookOpen, Construction } from "lucide-react";
 const Subjects = () => {
   return (
     <Layout>
-      <PageWrapper skeletonType="default">
+      <PageWrapper skeletonType="table">
         <div className="px-6 py-4 space-y-4">
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">

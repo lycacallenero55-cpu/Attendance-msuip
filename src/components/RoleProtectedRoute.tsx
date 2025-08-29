@@ -56,7 +56,7 @@ export const RoleProtectedRoute = ({ children, allowedRoles }: RoleProtectedRout
   const isInitialMount = useRef(true);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
+    const fetchRole = async () => {
       // If we have cached role for the same user, don't refetch
       if (cachedUserRole && cachedUserId === user?.id) {
         setUserRole(cachedUserRole);
@@ -102,7 +102,7 @@ export const RoleProtectedRoute = ({ children, allowedRoles }: RoleProtectedRout
 
     // Only fetch role on initial mount or when user changes
     if (!authLoading && (isInitialMount.current || cachedUserId !== user?.id)) {
-      fetchUserRole();
+      fetchRole();
       isInitialMount.current = false;
     }
   }, [user?.id, authLoading]);
