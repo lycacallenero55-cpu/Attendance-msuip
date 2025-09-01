@@ -67,7 +67,9 @@ const AppRoutes = () => {
       path="/reports"
       element={
         <ProtectedRoute>
-          <Reports />
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer']}>
+            <Reports />
+          </RoleProtectedRoute>
         </ProtectedRoute>
       }
     />
@@ -75,7 +77,7 @@ const AppRoutes = () => {
       path="/students"
       element={
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={['admin']}>
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer']}>
             <Students />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -85,7 +87,9 @@ const AppRoutes = () => {
       path="/schedule"
       element={
         <ProtectedRoute>
-          <Sessions />
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer', 'ROTC officer']}>
+            <Sessions />
+          </RoleProtectedRoute>
         </ProtectedRoute>
       }
     />
@@ -148,7 +152,7 @@ const AppRoutes = () => {
       path="/subjects"
       element={
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={['admin', 'instructor', 'staff']}>
+          <RoleProtectedRoute allowedRoles={['admin', 'Instructor']}>
             <Subjects />
           </RoleProtectedRoute>
         </ProtectedRoute>
