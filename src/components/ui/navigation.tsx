@@ -268,6 +268,17 @@ const DesktopNavigation = () => {
     }
   }, [user?.id]); // Only depend on user ID, not the full user object
 
+  const getPanelLabel = () => {
+    if (userRole === 'admin') return 'Admin Panel';
+    if (userRole === 'ROTC admin') return 'ROTC Admin Panel';
+    if (userRole === 'Instructor') return 'Instructor Panel';
+    if (userRole === 'SSG officer') return 'SSG Officer Panel';
+    if (userRole === 'ROTC officer') return 'ROTC Officer Panel';
+    return 'User Panel';
+  };
+
+
+
   const handleLogout = async () => {
     try {
       await signOut();
@@ -337,10 +348,10 @@ const DesktopNavigation = () => {
              </Tooltip>
            ) : (
              <div 
-               className="bg-gradient-primary flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 w-8 h-8 rounded-md"
+               className="bg-gradient-primary flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 w-10 h-10 rounded-md"
                onClick={handleToggleSidebar}
              >
-               <GraduationCap className="w-6 h-6 text-primary-foreground" />
+               <GraduationCap className="w-7 h-7 text-primary-foreground" />
              </div>
            )}
           <div className={cn(
@@ -351,6 +362,7 @@ const DesktopNavigation = () => {
           )}>
             <div className="min-w-0">
               <h1 className="text-lg font-bold text-education-navy whitespace-nowrap">AMSUIP</h1>
+              <p className="text-sm text-muted-foreground whitespace-nowrap">{getPanelLabel()}</p>
             </div>
           </div>
         </div>
@@ -720,6 +732,15 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     }
   }, [user?.id]); // Only depend on user ID, not the full user object
 
+  const getPanelLabel = () => {
+    if (userRole === 'admin') return 'Admin Panel';
+    if (userRole === 'ROTC admin') return 'ROTC Admin Panel';
+    if (userRole === 'Instructor') return 'Instructor Panel';
+    if (userRole === 'SSG officer') return 'SSG Officer Panel';
+    if (userRole === 'ROTC officer') return 'ROTC Officer Panel';
+    return 'User Panel';
+  };
+
   const handleLogout = async () => {
     try {
       await signOut();
@@ -770,6 +791,7 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
             </div>
             <div>
               <h1 className="text-lg font-bold text-education-navy">AMSUIP</h1>
+              <p className="text-sm text-muted-foreground">{getPanelLabel()}</p>
             </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
