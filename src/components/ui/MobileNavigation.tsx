@@ -51,7 +51,7 @@ export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) =
   ];
 
   const roleBasedItems = [
-    ...(['admin', 'Instructor', 'SSG officer', 'ROTC admin', 'ROTC officer'].includes(userRole) ? [{
+    ...(['admin', 'Instructor', 'SSG officer'].includes(userRole) ? [{
       icon: Book, 
       label: "Subjects", 
       href: "/subjects",

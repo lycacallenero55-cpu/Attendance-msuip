@@ -85,14 +85,14 @@ const getNavItems = (userRole: string = '') => [
   },
   { icon: Users, label: "Students", href: "/students" },
   { icon: BarChartBig, label: "Reports", href: "/reports" },
-  ...(['admin', 'Instructor', 'SSG officer', 'ROTC admin', 'ROTC officer'].includes(userRole) ? [{ icon: Book, label: "Subjects", href: "/subjects" }] : []),
+  ...(['admin', 'Instructor', 'SSG officer'].includes(userRole) ? [{ icon: Book, label: "Subjects", href: "/subjects" }] : []),
   { 
     icon: FileText, 
     label: "Excuse Application", 
     href: "/excuse-application",
     isActive: (path: string) => path === '/excuse-application'
   },
-  { icon: CalendarDays, label: "Allowed Terms", href: "/academic-year" },
+  ...(userRole !== 'ROTC admin' ? [{ icon: CalendarDays, label: "Allowed Terms", href: "/academic-year" }] : []),
   ...(userRole === 'admin' ? [{ icon: UserCog, label: "Accounts", href: "/accounts" }] : []),
 ];
 
