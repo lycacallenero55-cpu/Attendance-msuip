@@ -18,39 +18,32 @@ export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) =
   const location = useLocation();
 
   const getNavItems = (userRole: string = '') => {
-    // Base items that all roles can see
-    const baseItems = [
-      { 
-        icon: LayoutDashboard, 
-        label: "Dashboard", 
-        href: "/",
-        isActive: (path: string) => path === '/'
-      },
-      { 
-        icon: UserCheck, 
-        label: "Attendance", 
-        href: "/take-attendance",
-        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
-      }
-    ];
-
-    // Role-specific items
-    let roleItems = [];
-
     if (userRole === 'admin') {
-      // Admin: Full access
-      roleItems = [
+      // Admin - naturally full access
+      return [
         { 
-          icon: Users, 
-          label: "Students", 
-          href: "/students",
-          isActive: (path: string) => path === '/students'
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
         },
         { 
           icon: CalendarClock, 
           label: "Sessions", 
           href: "/schedule",
           isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
         },
         { 
           icon: FileText, 
@@ -66,19 +59,31 @@ export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) =
         }
       ];
     } else if (userRole === 'ROTC admin') {
-      // ROTC Admin: Same as Admin but exclude Subjects
-      roleItems = [
+      // ROTC Admin - same as admin but subject and allowed terms is restricted or hidden
+      return [
         { 
-          icon: Users, 
-          label: "Students", 
-          href: "/students",
-          isActive: (path: string) => path === '/students'
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
         },
         { 
           icon: CalendarClock, 
           label: "Sessions", 
           href: "/schedule",
           isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
         },
         { 
           icon: FileText, 
@@ -88,19 +93,31 @@ export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) =
         }
       ];
     } else if (userRole === 'Instructor') {
-      // Instructor: Keep current access, ensure Subjects is functional
-      roleItems = [
+      // Instructor
+      return [
         { 
-          icon: Users, 
-          label: "Students", 
-          href: "/students",
-          isActive: (path: string) => path === '/students'
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
         },
         { 
           icon: CalendarClock, 
           label: "Sessions", 
           href: "/schedule",
           isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
         },
         { 
           icon: FileText, 
@@ -116,19 +133,31 @@ export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) =
         }
       ];
     } else if (userRole === 'SSG officer') {
-      // SSG Officer: Keep current access but remove Subjects
-      roleItems = [
+      // SSG Officer - no subject
+      return [
         { 
-          icon: Users, 
-          label: "Students", 
-          href: "/students",
-          isActive: (path: string) => path === '/students'
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
         },
         { 
           icon: CalendarClock, 
           label: "Sessions", 
           href: "/schedule",
           isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
         },
         { 
           icon: FileText, 
@@ -138,25 +167,40 @@ export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) =
         }
       ];
     } else if (userRole === 'ROTC officer') {
-      // ROTC Officer: Only Take Attendance, Profile, Logout
-      roleItems = [];
-    } else {
-      // Default user role: Limited access
-      roleItems = [
+      // ROTC Officer - only Take Attendance, Profile, Log Out
+      return [
         { 
-          icon: CalendarClock, 
-          label: "Sessions", 
-          href: "/schedule",
-          isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+        }
+      ];
+    } else {
+      // Default user role - limited access
+      return [
+        { 
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
         }
       ];
     }
-
-    return [...baseItems, ...roleItems];
   };
 
-  const navItems = getNavItems(userRole);
-
+    const navItems = getNavItems(userRole);
+  
+  // Debug logging
+  console.log('Mobile Navigation - Current userRole:', userRole);
+  console.log('Mobile Navigation - Generated navItems:', navItems);
+  
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex justify-around items-center h-16 z-30 md:hidden">
       {navItems.map((item) => {

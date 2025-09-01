@@ -70,23 +70,16 @@ let cachedUserId: string | null = getCachedUserId();
 
 // Navigation items configuration
 const getNavItems = (userRole: string = '') => {
-  // Base items that all roles can see
-  const baseItems = [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-    { 
-      icon: UserCheck, 
-      label: "Take Attendance", 
-      href: "/take-attendance",
-      isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
-    }
-  ];
-
-  // Role-specific items
-  let roleItems = [];
-
   if (userRole === 'admin') {
-    // Admin: Full access
-    roleItems = [
+    // Admin - naturally full access
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
       { 
         icon: CalendarClock, 
         label: "Sessions", 
@@ -106,8 +99,15 @@ const getNavItems = (userRole: string = '') => {
       { icon: UserCog, label: "Accounts", href: "/accounts" }
     ];
   } else if (userRole === 'ROTC admin') {
-    // ROTC Admin: Same as Admin but exclude Subjects and Allowed Terms
-    roleItems = [
+    // ROTC Admin - same as admin but subject and allowed terms is restricted or hidden
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
       { 
         icon: CalendarClock, 
         label: "Sessions", 
@@ -125,8 +125,15 @@ const getNavItems = (userRole: string = '') => {
       { icon: UserCog, label: "Accounts", href: "/accounts" }
     ];
   } else if (userRole === 'Instructor') {
-    // Instructor: Keep current access, ensure Subjects is functional
-    roleItems = [
+    // Instructor
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
       { 
         icon: CalendarClock, 
         label: "Sessions", 
@@ -144,8 +151,15 @@ const getNavItems = (userRole: string = '') => {
       }
     ];
   } else if (userRole === 'SSG officer') {
-    // SSG Officer: Keep current access but remove Subjects
-    roleItems = [
+    // SSG Officer - no subject
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
       { 
         icon: CalendarClock, 
         label: "Sessions", 
@@ -162,16 +176,24 @@ const getNavItems = (userRole: string = '') => {
       }
     ];
   } else if (userRole === 'ROTC officer') {
-    // ROTC Officer: Only Take Attendance, Profile, Logout
-    roleItems = [];
-  } else {
-    // Default user role: Limited access
-    roleItems = [
+    // ROTC Officer - only Take Attendance, Profile, Log Out
+    return [
       { 
-        icon: CalendarClock, 
-        label: "Sessions", 
-        href: "/schedule",
-        isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      }
+    ];
+  } else {
+    // Default user role - limited access
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
       },
       { 
         icon: FileText, 
@@ -181,8 +203,6 @@ const getNavItems = (userRole: string = '') => {
       }
     ];
   }
-
-  return [...baseItems, ...roleItems];
 };
 
 // Desktop Sidebar Navigation
@@ -198,8 +218,12 @@ const DesktopNavigation = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isCollapsing, setIsCollapsing] = useState(false);
   const isInitialMount = useRef(true);
-  const navItems = getNavItems(userRole);
-
+    const navItems = getNavItems(userRole);
+  
+  // Debug logging
+  console.log('Desktop Navigation - Current userRole:', userRole);
+  console.log('Desktop Navigation - Generated navItems:', navItems);
+  
   useEffect(() => {
     const fetchRole = async () => {
       // If we have cached role for the same user, don't refetch
@@ -645,8 +669,12 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const isInitialMount = useRef(true);
-  const navItems = getNavItems(userRole);
-
+    const navItems = getNavItems(userRole);
+  
+  // Debug logging
+  console.log('MobileDrawer - Current userRole:', userRole);
+  console.log('MobileDrawer - Generated navItems:', navItems);
+  
   // Handle animation states
   useEffect(() => {
     if (isOpen) {
@@ -705,14 +733,12 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }, [user?.id]); // Only depend on user ID, not the full user object
 
   const getPanelLabel = () => {
-    switch (userRole) {
-      case 'admin':
-        return 'Admin Panel';
-      case 'instructor':
-        return 'Instructor Panel';
-      default:
-        return 'User Panel';
-    }
+    if (userRole === 'admin') return 'Admin Panel';
+    if (userRole === 'ROTC admin') return 'ROTC Admin Panel';
+    if (userRole === 'Instructor') return 'Instructor Panel';
+    if (userRole === 'SSG officer') return 'SSG Officer Panel';
+    if (userRole === 'ROTC officer') return 'ROTC Officer Panel';
+    return 'User Panel';
   };
 
   const handleLogout = async () => {
