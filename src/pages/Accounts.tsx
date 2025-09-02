@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 
 type AccountStatus = 'active' | 'inactive' | 'pending' | 'suspended';
-type UserRole = 'admin' | 'instructor' | 'user';
+type UserRole = 'admin' | 'Instructor' | 'SSG officer' | 'ROTC admin' | 'ROTC officer';
 
 interface Profile {
   id: string;
@@ -38,10 +38,12 @@ interface Profile {
 
 // Role Badge Component
 const RoleBadge = ({ role }: { role: UserRole }) => {
-  const roleStyles = {
+const roleStyles = {
     admin: "bg-primary/10 text-primary",
-    instructor: "bg-secondary/10 text-secondary-foreground",
-    user: "bg-muted text-muted-foreground"
+    Instructor: "bg-secondary/10 text-secondary-foreground",
+    'SSG officer': "bg-blue-100 text-blue-800",
+    'ROTC admin': "bg-green-100 text-green-800",
+    'ROTC officer': "bg-purple-100 text-purple-800"
   };
 
   return (
@@ -134,10 +136,19 @@ const Accounts = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Explicitly set role to 'admin' for admin users
-      const adminProfiles = (admins || []).map(admin => ({ ...admin, role: 'admin' as UserRole }));
+      // Explicitly set role to 'admin' for admin users and ensure proper typing
+      const adminProfiles = (admins || []).map(admin => ({ 
+        ...admin, 
+        role: 'admin' as UserRole,
+        status: (admin.status || 'active') as AccountStatus
+      }));
+      const userProfiles = (usersRows || []).map(user => ({ 
+        ...user, 
+        role: user.role as UserRole,
+        status: (user.status || 'active') as AccountStatus
+      }));
       
-      setProfiles([...adminProfiles, ...(usersRows || [])]);
+      setProfiles([...adminProfiles, ...userProfiles]);
     } catch (error) {
       console.error('Error loading accounts:', error);
       toast.error('Failed to load accounts');
@@ -164,7 +175,7 @@ const Accounts = () => {
       
       toast.success('User approved successfully');
       if (currentUserProfile?.role === 'admin') {
-        loadAllProfiles();
+        loadAllAccounts();
       }
     } catch (error) {
       console.error('Error approving user:', error);
@@ -184,7 +195,7 @@ const Accounts = () => {
       
       toast.success('User rejected successfully');
       if (currentUserProfile?.role === 'admin') {
-        loadAllProfiles();
+        loadAllAccounts();
       }
     } catch (error) {
       console.error('Error rejecting user:', error);
@@ -221,8 +232,8 @@ const Accounts = () => {
         <div className="px-6 py-4 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Account Management</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-lg font-bold tracking-tight">ACCOUNT MANAGEMENT</h1>
+            <p className="text-sm text-muted-foreground">
               Manage user accounts and access permissions
             </p>
           </div>
