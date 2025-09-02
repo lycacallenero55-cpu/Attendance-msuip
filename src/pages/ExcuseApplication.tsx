@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 type ExcuseStatus = 'pending' | 'approved' | 'rejected';
 
 type ExcuseApplication = {
-  id: string;
+  id: number;
   student_id: number;
   session_id?: number;
   absence_date: string;
@@ -81,7 +81,7 @@ const ExcuseApplicationContent = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<string | number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   const {
     showConfirmDialog,
@@ -138,7 +138,10 @@ const ExcuseApplicationContent = () => {
 
       if (error) throw error;
       console.log('Fetched excuses data:', data);
-      setExcuses(data || []);
+      setExcuses((data || []).map(excuse => ({
+        ...excuse,
+        status: excuse.status as ExcuseStatus
+      })));
     } catch (error) {
       console.error('Error fetching excuses:', error);
       toast({
@@ -213,7 +216,7 @@ const ExcuseApplicationContent = () => {
             documentation_url: excuse_image_url || formData.documentation_url,
             updated_at: new Date().toISOString()
           })
-          .eq('id', selectedExcuse.id);
+        .eq('id', selectedExcuse.id);
 
         if (error) throw error;
 
@@ -260,7 +263,7 @@ const ExcuseApplicationContent = () => {
     }
   };
 
-  const handleUpdateStatus = async (id: string, status: ExcuseStatus, notes?: string) => {
+  const handleUpdateStatus = async (id: number, status: ExcuseStatus, notes?: string) => {
     try {
       const { error } = await supabase
         .from('excuse_applications')
@@ -290,7 +293,7 @@ const ExcuseApplicationContent = () => {
     }
   };
 
-  const handleDeleteExcuse = async (id: string | number) => {
+  const handleDeleteExcuse = async (id: number) => {
     try {
       console.log('Deleting excuse with ID:', id, 'Type:', typeof id);
       
@@ -335,7 +338,7 @@ const ExcuseApplicationContent = () => {
         const { error: altError, count: altCount } = await supabase
           .from('excuse_applications')
           .delete()
-          .eq('id', parseInt(id.toString()));
+          .eq('id', id);
         
         console.log('Alternative delete result - Error:', altError, 'Count:', altCount);
         
@@ -431,8 +434,8 @@ const ExcuseApplicationContent = () => {
     <div className="flex-1 space-y-4 px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Excuse Applications</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-lg font-bold tracking-tight">EXCUSE APPLICATIONS</h1>
+          <p className="text-sm text-muted-foreground">
             Review and manage student excuse applications for absences
           </p>
         </div>
