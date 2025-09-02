@@ -173,12 +173,14 @@ const TakeAttendanceContent: React.FC = () => {
         title: session.title || 'Untitled Session',
         description: session.description || '',
         type: (session.type as 'class' | 'event' | 'other') || 'class',
+        location: '',
+        instructor: '',
         date: session.date,
         time_in: session.time_in || '00:00',
         time_out: session.time_out || '00:00',
         created_by_user_id: session.created_by_user_id,
         creator: session.created_by_user_id ? creatorsMap.get(session.created_by_user_id) : undefined,
-        capacity: String(session.capacity || 0),
+        capacity: parseInt(session.capacity) || 0,
         program: session.program || '',
         year: session.year || '',
         section: session.section || ''
@@ -287,8 +289,8 @@ const TakeAttendanceContent: React.FC = () => {
     <div className="flex-1 flex flex-col space-y-4 px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Take Attendance</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-lg font-bold text-education-navy">TAKE ATTENDANCE</h1>
+          <p className="text-sm text-muted-foreground">
             Select a session to take attendance
           </p>
         </div>
