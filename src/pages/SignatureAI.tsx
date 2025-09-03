@@ -133,6 +133,15 @@ const SignatureAI = () => {
 
   const loadSessionState = async () => {
     try {
+      // Detect full page reload and skip restore for a fresh start
+      const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+      const navType = navEntries && navEntries.length > 0 ? navEntries[0].type : undefined;
+      const legacyNavType = (window.performance as any)?.navigation?.type; // 1 = reload
+      const isReload = navType === 'reload' || legacyNavType === 1;
+      if (isReload) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        return;
+      }
       const raw = sessionStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
