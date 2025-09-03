@@ -704,7 +704,7 @@ const SignatureAI = () => {
                   variant={useCamera ? "default" : "outline"}
                   size="sm"
                   onClick={startCamera}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 hover:bg-transparent hover:text-foreground"
                 >
                   <Camera className="w-4 h-4" />
                   Camera
