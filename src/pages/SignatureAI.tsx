@@ -352,7 +352,7 @@ const SignatureAI = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
+                    className={`h-6 w-6 p-0 opacity-60 text-muted-foreground hover:opacity-100 hover:text-foreground hover:bg-transparent transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
                     onClick={() => setIsStudentCollapsed(false)}
                     aria-label="Expand"
                   >
@@ -363,7 +363,7 @@ const SignatureAI = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-opacity"
+                        className="h-6 w-6 p-0 opacity-60 text-muted-foreground hover:opacity-100 hover:text-foreground hover:bg-transparent transition-colors"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -391,7 +391,7 @@ const SignatureAI = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
+                    className={`h-6 w-6 p-0 opacity-60 text-muted-foreground hover:opacity-100 hover:text-foreground hover:bg-transparent transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
                     onClick={() => setIsStudentCollapsed(true)}
                     aria-label="Collapse"
                   >
@@ -402,7 +402,7 @@ const SignatureAI = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-opacity"
+                        className="h-6 w-6 p-0 opacity-60 text-muted-foreground hover:opacity-100 hover:text-foreground hover:bg-transparent transition-colors"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -496,7 +496,7 @@ const SignatureAI = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex items-center gap-2 hover:bg-transparent"
+                  className="flex items-center gap-2 hover:bg-transparent hover:text-foreground"
                   onClick={() => {
                     setCurrentTrainingSet('forged');
                     const input = document.createElement('input');
