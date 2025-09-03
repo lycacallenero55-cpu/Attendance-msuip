@@ -716,7 +716,10 @@ const SignatureAI = () => {
 
               {/* Large Square Preview Box */}
               <div className="space-y-2">
-                <Label>Signature Preview</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Signature Preview</Label>
+                  <div className="text-xs text-muted-foreground">{useCamera ? 'Camera' : 'Upload'}</div>
+                </div>
                 <div className="w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
                   {useCamera ? (
                     <div className="w-full h-full">
