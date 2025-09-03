@@ -306,51 +306,54 @@ const SignatureAI = () => {
           {/* Left Card: Model Training Section */}
           <Card className="h-fit">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2">
                     <Brain className="w-5 h-5" />
                     Model Training
+                    {trainingFiles.length > 0 && (
+                      <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-2">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={removeAllTrainingFiles} className="text-red-600">
+                            Remove All Samples
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </CardTitle>
                   <CardDescription>
                     Upload signature samples to train AI model for a specific student
                   </CardDescription>
                 </div>
-                {trainingFiles.length > 0 && (
-                  <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={removeAllTrainingFiles} className="text-red-600">
-                        Remove All Samples
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Upload Button */}
-              <Button
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.multiple = true;
-                  input.onchange = (e) => {
-                    const files = Array.from((e.target as HTMLInputElement).files || []);
-                    handleTrainingFilesChange(files);
-                  };
-                  input.click();
-                }}
-                className="w-full"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Upload
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.multiple = true;
+                    input.onchange = (e) => {
+                      const files = Array.from((e.target as HTMLInputElement).files || []);
+                      handleTrainingFilesChange(files);
+                    };
+                    input.click();
+                  }}
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload
+                </Button>
+              </div>
 
               {/* Large Square Preview Box for Training Images */}
               <div className="space-y-2">
