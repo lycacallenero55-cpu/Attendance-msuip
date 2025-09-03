@@ -311,25 +311,31 @@ const SignatureAI = () => {
                   <CardTitle className="flex items-center gap-2">
                     <Brain className="w-5 h-5" />
                     Model Training
-                    {trainingFiles.length > 0 && (
-                      <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-2">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={removeAllTrainingFiles} className="text-red-600">
-                            Remove All Samples
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
                   </CardTitle>
                   <CardDescription>
                     Upload signature samples to train AI model for a specific student
                   </CardDescription>
                 </div>
+                <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      onClick={removeAllTrainingFiles} 
+                      className="text-red-600"
+                      disabled={trainingFiles.length === 0}
+                    >
+                      Remove All Samples
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
