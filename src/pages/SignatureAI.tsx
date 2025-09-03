@@ -60,6 +60,7 @@ const SignatureAI = () => {
   // Dropdown State
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isConfirmRemoveOpen, setIsConfirmRemoveOpen] = useState(false);
+  const [visibleCounts, setVisibleCounts] = useState<{ genuine: number; forged: number }>({ genuine: 60, forged: 60 });
 
   // Student Selection State
   interface SelectedStudent {
@@ -611,7 +612,9 @@ const SignatureAI = () => {
 
                   {((currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).length > 0) ? (
                     <div className="grid grid-cols-3 gap-2 w-full h-full p-4 overflow-y-auto">
-                      {(currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).slice(0, 60).map((item, index) => (
+                      {(currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles)
+                        .slice(0, visibleCounts[currentTrainingSet])
+                        .map((item, index) => (
                         <div key={index} className="relative group/itm cursor-pointer" onClick={() => openImageModal((currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).map(f => f.preview), index, { kind: 'training', setType: currentTrainingSet })}>
                           <img
                             src={item.preview}
@@ -632,6 +635,22 @@ const SignatureAI = () => {
                           </Button>
                         </div>
                       ))}
+                      {(currentTrainingSet === 'genuine' ? genuineFiles.length : forgedFiles.length) > visibleCounts[currentTrainingSet] && (
+                        <div className="col-span-3 flex justify-center pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setVisibleCounts((prev) => ({
+                                ...prev,
+                                [currentTrainingSet]: prev[currentTrainingSet] + 60,
+                              }))
+                            }
+                          >
+                            Show more
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-center text-gray-500">
