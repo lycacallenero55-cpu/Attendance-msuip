@@ -437,65 +437,48 @@ const SignatureAI = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Upload Button */}
-              <div className="relative inline-flex items-center gap-2 group">
+              {/* Upload Buttons: Forged (left, normal) and Genuine (right, highlighted) */}
+              <div className="flex gap-2">
                 <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
                   onClick={() => {
+                    setCurrentTrainingSet('forged');
                     const input = document.createElement('input');
                     input.type = 'file';
                     input.accept = 'image/*';
                     input.multiple = true;
                     input.onchange = (e) => {
                       const files = Array.from((e.target as HTMLInputElement).files || []);
-                      handleTrainingFilesChange(files, currentTrainingSet);
+                      handleTrainingFilesChange(files, 'forged');
                     };
                     input.click();
                   }}
-                  size="sm"
-                  className="flex items-center gap-2"
                 >
                   <Upload className="w-4 h-4" />
-                  Upload
+                  Forged
                 </Button>
-                {/* Hover options */}
-                <div className="absolute -right-[170px] top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'image/*';
-                      input.multiple = true;
-                      input.onchange = (e) => {
-                        const files = Array.from((e.target as HTMLInputElement).files || []);
-                        handleTrainingFilesChange(files, 'genuine');
-                        setCurrentTrainingSet('genuine');
-                      };
-                      input.click();
-                    }}
-                  >
-                    Genuine
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'image/*';
-                      input.multiple = true;
-                      input.onchange = (e) => {
-                        const files = Array.from((e.target as HTMLInputElement).files || []);
-                        handleTrainingFilesChange(files, 'forged');
-                        setCurrentTrainingSet('forged');
-                      };
-                      input.click();
-                    }}
-                  >
-                    Forged
-                  </Button>
-                </div>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  onClick={() => {
+                    setCurrentTrainingSet('genuine');
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.multiple = true;
+                    input.onchange = (e) => {
+                      const files = Array.from((e.target as HTMLInputElement).files || []);
+                      handleTrainingFilesChange(files, 'genuine');
+                    };
+                    input.click();
+                  }}
+                >
+                  <Upload className="w-4 h-4" />
+                  Genuine
+                </Button>
               </div>
 
               {/* Large Square Preview Box for Training Images (Genuine/Forged switch) */}
@@ -800,42 +783,33 @@ const SignatureAI = () => {
                     className="w-full h-auto max-h-[60vh] object-contain mx-auto"
                   />
                   
-                  {modalImages.length > 1 && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="absolute left-4 top-1/2 transform -translate-y-1/2"
-                        onClick={goToPreviousImage}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="absolute right-4 top-1/2 transform -translate-y-1/2"
-                        onClick={goToNextImage}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                      
-                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-                        <div className="bg-black/50 text-white px-3 py-1 rounded-full text-sm">
-                          {modalImageIndex + 1} / {modalImages.length}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  {/* Prev/Next Arrows */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2"
+                    onClick={goToPreviousImage}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2"
+                    onClick={goToNextImage}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
 
-                  {/* Trash action */}
-                  {modalContext && modalContext.kind === 'training' && (
-                    <div className="mt-4 flex justify-center">
-                      <Button variant="destructive" onClick={deleteModalCurrentImage} className="gap-2">
+                  {/* Count + Trash inline, plain white */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 text-white text-sm">
+                    <span>{modalImageIndex + 1} / {modalImages.length}</span>
+                    {modalContext && modalContext.kind === 'training' && (
+                      <button onClick={deleteModalCurrentImage} aria-label="Delete Image">
                         <Trash2 className="w-4 h-4" />
-                        Delete Image
-                      </Button>
-                    </div>
-                  )}
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
