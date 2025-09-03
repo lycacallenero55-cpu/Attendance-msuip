@@ -850,7 +850,7 @@ const SignatureAI = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="hidden group-hover:flex absolute left-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-white opacity-70 hover:opacity-100"
+                      className="hidden group-hover:flex absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 items-center justify-center"
                       onClick={goToPreviousImage}
                       aria-label="Previous"
                     >
@@ -859,7 +859,7 @@ const SignatureAI = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="hidden group-hover:flex absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-white opacity-70 hover:opacity-100"
+                      className="hidden group-hover:flex absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 items-center justify-center"
                       onClick={goToNextImage}
                       aria-label="Next"
                     >
