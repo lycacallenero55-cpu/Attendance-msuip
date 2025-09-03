@@ -55,6 +55,27 @@ const SignatureAI = () => {
   
   // Dropdown State
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Student Selection State
+  interface SelectedStudent {
+    id: string;
+    name: string;
+    program: string;
+    year: string;
+    section: string;
+  }
+  const [selectedStudent, setSelectedStudent] = useState<SelectedStudent | null>(null);
+  const [isStudentDialogOpen, setIsStudentDialogOpen] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
+  // Mock students list for UI demonstration; replace with API in integration
+  const mockStudents: SelectedStudent[] = [
+    { id: '2023001', name: 'Juan Dela Cruz', program: 'BSIT', year: '3', section: 'A' },
+    { id: '2023002', name: 'Maria Santos', program: 'BSCS', year: '2', section: 'B' },
+    { id: '2023003', name: 'John Reyes', program: 'BSIS', year: '1', section: 'C' },
+  ];
+  const filteredStudents = mockStudents.filter(s => 
+    s.id.includes(studentSearch.trim()) || s.name.toLowerCase().includes(studentSearch.trim().toLowerCase())
+  );
   
   const verificationInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -82,7 +103,7 @@ const SignatureAI = () => {
     if (!studentId.trim()) {
       toast({
         title: "Error",
-        description: "Please enter a student ID",
+        description: "Please select a student",
         variant: "destructive",
       });
       return;
@@ -277,26 +298,63 @@ const SignatureAI = () => {
         {/* Student Selection Card */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              Select Student
-            </CardTitle>
-            <CardDescription>
-              Choose a student to train the AI model for signature verification
-            </CardDescription>
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Select Student
+                </CardTitle>
+                <CardDescription>
+                  Choose a student to train the AI model for signature verification
+                </CardDescription>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => setIsStudentDialogOpen(true)}
+                  >
+                    {selectedStudent ? 'Change' : 'Select'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="studentId">Student ID</Label>
-              <Input
-                id="studentId"
-                type="number"
-                placeholder="Enter student ID"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                className="max-w-md"
-              />
-            </div>
+            {selectedStudent ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+                <div>
+                  <Label className="text-muted-foreground">ID</Label>
+                  <div className="font-medium">{selectedStudent.id}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Name</Label>
+                  <div className="font-medium">{selectedStudent.name}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Program</Label>
+                  <div className="font-medium">{selectedStudent.program}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Year</Label>
+                  <div className="font-medium">{selectedStudent.year}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Section</Label>
+                  <div className="font-medium">{selectedStudent.section}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">No student selected.</div>
+            )}
           </CardContent>
         </Card>
 
@@ -463,13 +521,40 @@ const SignatureAI = () => {
           {/* Right Card: Signature Verification Section */}
           <Card className="h-fit">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Scan className="w-5 h-5" />
-                Signature Verification
-              </CardTitle>
-              <CardDescription>
-                Upload or capture a signature to verify against trained models
-              </CardDescription>
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="flex items-center gap-2">
+                    <Scan className="w-5 h-5" />
+                    Signature Verification
+                  </CardTitle>
+                  <CardDescription>
+                    Upload or capture a signature to verify against trained models
+                  </CardDescription>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setVerificationFile(null);
+                        setVerificationPreview('');
+                        stopCamera();
+                      }}
+                      disabled={!verificationFile && !useCamera && !verificationPreview}
+                    >
+                      Clear
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Camera/Upload Toggle */}
@@ -644,6 +729,45 @@ const SignatureAI = () => {
                   )}
                 </>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Student Selection Dialog */}
+        <Dialog open={isStudentDialogOpen} onOpenChange={setIsStudentDialogOpen}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Select Student</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input
+                placeholder="Search by ID or Name"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+              />
+              <div className="max-h-64 overflow-auto border rounded-md">
+                {filteredStudents.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">No results</div>
+                ) : (
+                  <ul className="divide-y">
+                    {filteredStudents.map((s) => (
+                      <li key={s.id}>
+                        <button
+                          className="w-full text-left p-3 hover:bg-muted/50"
+                          onClick={() => {
+                            setSelectedStudent(s);
+                            setStudentId(s.id);
+                            setIsStudentDialogOpen(false);
+                          }}
+                        >
+                          <div className="font-medium">{s.name}</div>
+                          <div className="text-xs text-muted-foreground">ID: {s.id} • {s.program} • Year {s.year} • Sec {s.section}</div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </DialogContent>
         </Dialog>
