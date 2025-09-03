@@ -801,14 +801,16 @@ const SignatureAI = () => {
                     <ChevronRight className="w-4 h-4" />
                   </Button>
 
-                  {/* Count + Trash inline, plain white */}
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 text-white text-sm">
-                    <span>{modalImageIndex + 1} / {modalImages.length}</span>
-                    {modalContext && modalContext.kind === 'training' && (
-                      <button onClick={deleteModalCurrentImage} aria-label="Delete Image">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                  {/* Count + Trash inline with translucent background (old style) */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                    <div className="bg-black/50 text-white px-3 py-1 rounded-full text-sm flex items-center gap-3">
+                      <span>{modalImageIndex + 1} / {modalImages.length}</span>
+                      {modalContext && modalContext.kind === 'training' && (
+                        <button onClick={deleteModalCurrentImage} aria-label="Delete Image" className="text-white">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
