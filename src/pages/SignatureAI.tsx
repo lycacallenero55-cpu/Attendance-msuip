@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileUpload } from '@/components/ui/file-upload';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/components/ui/use-toast';
 import { 
   Upload, 
@@ -21,7 +22,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  User
+  User,
+  MoreVertical
 } from 'lucide-react';
 import { aiService } from '@/lib/aiService';
 
@@ -50,6 +52,9 @@ const SignatureAI = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalImageIndex, setModalImageIndex] = useState(0);
   const [modalImages, setModalImages] = useState<string[]>([]);
+  
+  // Dropdown State
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   const verificationInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -207,6 +212,16 @@ const SignatureAI = () => {
     setModalImageIndex(prev => prev < modalImages.length - 1 ? prev + 1 : 0);
   };
 
+  const removeAllTrainingFiles = () => {
+    trainingFiles.forEach(file => URL.revokeObjectURL(file.preview));
+    setTrainingFiles([]);
+    setIsDropdownOpen(false);
+    toast({
+      title: "Samples Removed",
+      description: "All training samples have been removed",
+    });
+  };
+
   const handleVerifySignature = async () => {
     if (!verificationFile) {
       toast({
@@ -291,32 +306,69 @@ const SignatureAI = () => {
           {/* Left Card: Model Training Section */}
           <Card className="h-fit">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Brain className="w-5 h-5" />
-                Model Training
-              </CardTitle>
-              <CardDescription>
-                Upload signature samples to train AI model for a specific student
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Brain className="w-5 h-5" />
+                    Model Training
+                  </CardTitle>
+                  <CardDescription>
+                    Upload signature samples to train AI model for a specific student
+                  </CardDescription>
+                </div>
+                {trainingFiles.length > 0 && (
+                  <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={removeAllTrainingFiles} className="text-red-600">
+                        Remove All Samples
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Upload Button */}
+              <Button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.multiple = true;
+                  input.onchange = (e) => {
+                    const files = Array.from((e.target as HTMLInputElement).files || []);
+                    handleTrainingFilesChange(files);
+                  };
+                  input.click();
+                }}
+                className="w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Upload
+              </Button>
+
               {/* Large Square Preview Box for Training Images */}
               <div className="space-y-2">
                 <Label>Training Images Preview</Label>
                 <div className="w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
                   {trainingFiles.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-2 w-full h-full p-4 overflow-y-auto">
+                    <div className="grid grid-cols-3 gap-2 w-full h-full p-4 overflow-y-auto">
                       {trainingFiles.map((item, index) => (
                         <div key={index} className="relative group cursor-pointer" onClick={() => openImageModal(trainingFiles.map(f => f.preview), index)}>
                           <img
                             src={item.preview}
                             alt={`Sample ${index + 1}`}
-                            className="w-full h-20 object-cover rounded border hover:opacity-80 transition-opacity"
+                            className="w-full h-16 object-cover rounded border hover:opacity-80 transition-opacity"
                           />
                           <Button
                             size="sm"
                             variant="destructive"
-                            className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-1 right-1 w-5 h-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
                             onClick={(e) => {
                               e.stopPropagation();
                               removeTrainingFile(index);
@@ -335,25 +387,6 @@ const SignatureAI = () => {
                   )}
                 </div>
               </div>
-
-              {/* Upload Button */}
-              <Button
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.multiple = true;
-                  input.onchange = (e) => {
-                    const files = Array.from((e.target as HTMLInputElement).files || []);
-                    handleTrainingFilesChange(files);
-                  };
-                  input.click();
-                }}
-                className="w-full"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Upload Training Images
-              </Button>
 
               {/* Train Button */}
               <Button
