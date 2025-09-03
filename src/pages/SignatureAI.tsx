@@ -63,6 +63,19 @@ const SignatureAI = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isConfirmRemoveOpen, setIsConfirmRemoveOpen] = useState(false);
   const [visibleCounts, setVisibleCounts] = useState<{ genuine: number; forged: number }>({ genuine: 60, forged: 60 });
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = React.useCallback(() => setIsDirty(true), []);
+
+  // Warn before unload if there are any interactions/changes
+  React.useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   // Student Selection State
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -159,6 +172,7 @@ const SignatureAI = () => {
     } else {
       setForgedFiles(prev => [...prev, ...newFiles]);
     }
+    markDirty();
   };
 
   const removeTrainingFile = (index: number, setType: 'genuine' | 'forged') => {
@@ -177,6 +191,7 @@ const SignatureAI = () => {
         return newFiles;
       });
     }
+    markDirty();
   };
 
   const handleTrainModel = async () => {
@@ -238,6 +253,7 @@ const SignatureAI = () => {
       setVerificationFile(file);
       setVerificationPreview(URL.createObjectURL(file));
       setVerificationResult(null);
+      markDirty();
     }
   };
 
@@ -247,6 +263,7 @@ const SignatureAI = () => {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setUseCamera(true);
+        markDirty();
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
@@ -276,6 +293,7 @@ const SignatureAI = () => {
             setVerificationPreview(URL.createObjectURL(file));
             setUseCamera(false);
             setVerificationResult(null);
+            markDirty();
             
             // Stop camera stream
             const stream = video.srcObject as MediaStream;
@@ -291,6 +309,7 @@ const SignatureAI = () => {
       const stream = videoRef.current.srcObject as MediaStream;
       stream?.getTracks().forEach(track => track.stop());
       setUseCamera(false);
+      markDirty();
     }
   };
 
@@ -329,6 +348,7 @@ const SignatureAI = () => {
       title: "Samples Removed",
       description: "All training samples have been removed",
     });
+    markDirty();
   };
 
   const deleteModalCurrentImage = () => {
@@ -392,7 +412,11 @@ const SignatureAI = () => {
 
   return (
     <Layout>
-      <div className="flex-1 flex flex-col space-y-6 px-6 py-4">
+      <div
+        className="flex-1 flex flex-col space-y-6 px-6 py-4"
+        onClick={markDirty}
+        onInput={markDirty}
+      >
         {/* Page Header */}
         <div className="space-y-0.5">
           <h1 className="text-lg font-bold text-education-navy">SIGNATURE AI</h1>
