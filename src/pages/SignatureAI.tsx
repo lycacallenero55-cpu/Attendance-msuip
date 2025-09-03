@@ -468,32 +468,26 @@ const SignatureAI = () => {
                     Upload signature samples to train AI model for a specific student
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 text-xs">
-                    <Badge variant="secondary">Genuine: {genuineFiles.length}</Badge>
-                    <Badge variant="secondary">Forged: {forgedFiles.length}</Badge>
-                  </div>
-                  <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
-                    <DropdownMenuTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem 
-                        onClick={removeAllTrainingFiles} 
-                        className="text-red-600"
-                        disabled={(genuineFiles.length + forgedFiles.length) === 0}
-                      >
-                        Remove All Samples
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      onClick={removeAllTrainingFiles} 
+                      className="text-red-600"
+                      disabled={(genuineFiles.length + forgedFiles.length) === 0}
+                    >
+                      Remove All Samples
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -545,7 +539,13 @@ const SignatureAI = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Training Images Preview</Label>
-                  <div className="text-xs text-muted-foreground">{currentTrainingSet === 'genuine' ? 'Genuine' : 'Forged'}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {currentTrainingSet === 'genuine' ? (
+                      <span>Genuine ({genuineFiles.length})</span>
+                    ) : (
+                      <span>Forged ({forgedFiles.length})</span>
+                    )}
+                  </div>
                 </div>
                 <div className="relative w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 group">
                   {/* Hover Previous/Next inside box */}
@@ -672,34 +672,29 @@ const SignatureAI = () => {
                     Upload or capture a signature to verify against trained models
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-xs">
-                    <Badge variant="secondary">{useCamera ? 'Camera' : 'Upload'}</Badge>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setVerificationFile(null);
-                          setVerificationPreview('');
-                          stopCamera();
-                        }}
-                        disabled={!verificationFile && !useCamera && !verificationPreview}
-                      >
-                        Clear
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setVerificationFile(null);
+                        setVerificationPreview('');
+                        stopCamera();
+                      }}
+                      disabled={!verificationFile && !useCamera && !verificationPreview}
+                    >
+                      Clear
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
