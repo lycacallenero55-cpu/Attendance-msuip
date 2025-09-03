@@ -599,7 +599,7 @@ const SignatureAI = () => {
               {/* Train Button */}
               <Button
                 onClick={handleTrainModel}
-                disabled={!studentId.trim() || trainingFiles.length === 0 || isTraining}
+                disabled={!studentId.trim() || (genuineFiles.length + forgedFiles.length) === 0 || isTraining}
                 className="w-full"
               >
                 {isTraining ? (
