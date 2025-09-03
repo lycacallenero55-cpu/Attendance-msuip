@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileUpload } from '@/components/ui/file-upload';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { 
   Upload, 
@@ -17,7 +18,10 @@ import {
   CheckCircle, 
   XCircle, 
   AlertCircle,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  User
 } from 'lucide-react';
 import { aiService } from '@/lib/aiService';
 
@@ -41,6 +45,11 @@ const SignatureAI = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const [useCamera, setUseCamera] = useState(false);
+  
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalImageIndex, setModalImageIndex] = useState(0);
+  const [modalImages, setModalImages] = useState<string[]>([]);
   
   const verificationInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -177,6 +186,27 @@ const SignatureAI = () => {
     }
   };
 
+  // Modal Functions
+  const openImageModal = (images: string[], startIndex: number = 0) => {
+    setModalImages(images);
+    setModalImageIndex(startIndex);
+    setIsModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setIsModalOpen(false);
+    setModalImages([]);
+    setModalImageIndex(0);
+  };
+
+  const goToPreviousImage = () => {
+    setModalImageIndex(prev => prev > 0 ? prev - 1 : modalImages.length - 1);
+  };
+
+  const goToNextImage = () => {
+    setModalImageIndex(prev => prev < modalImages.length - 1 ? prev + 1 : 0);
+  };
+
   const handleVerifySignature = async () => {
     if (!verificationFile) {
       toast({
@@ -229,6 +259,32 @@ const SignatureAI = () => {
           </p>
         </div>
 
+        {/* Student Selection Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Select Student
+            </CardTitle>
+            <CardDescription>
+              Choose a student to train the AI model for signature verification
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="studentId">Student ID</Label>
+              <Input
+                id="studentId"
+                type="number"
+                placeholder="Enter student ID"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                className="max-w-md"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Main Content - Two Cards Side by Side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
@@ -244,20 +300,6 @@ const SignatureAI = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Student ID Input */}
-              <div className="space-y-2">
-                <Label htmlFor="studentId">Student ID</Label>
-                <Input
-                  id="studentId"
-                  type="number"
-                  placeholder="Enter student ID"
-                  value={studentId}
-                  onChange={(e) => setStudentId(e.target.value)}
-                />
-              </div>
-
-              <Separator />
-
               {/* Large Square Preview Box for Training Images */}
               <div className="space-y-2">
                 <Label>Training Images Preview</Label>
@@ -265,17 +307,20 @@ const SignatureAI = () => {
                   {trainingFiles.length > 0 ? (
                     <div className="grid grid-cols-2 gap-2 w-full h-full p-4 overflow-y-auto">
                       {trainingFiles.map((item, index) => (
-                        <div key={index} className="relative group">
+                        <div key={index} className="relative group cursor-pointer" onClick={() => openImageModal(trainingFiles.map(f => f.preview), index)}>
                           <img
                             src={item.preview}
                             alt={`Sample ${index + 1}`}
-                            className="w-full h-20 object-cover rounded border"
+                            className="w-full h-20 object-cover rounded border hover:opacity-80 transition-opacity"
                           />
                           <Button
                             size="sm"
                             variant="destructive"
                             className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => removeTrainingFile(index)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeTrainingFile(index);
+                            }}
                           >
                             ×
                           </Button>
@@ -304,7 +349,6 @@ const SignatureAI = () => {
                   };
                   input.click();
                 }}
-                variant="outline"
                 className="w-full"
               >
                 <Upload className="w-4 h-4 mr-2" />
@@ -429,7 +473,8 @@ const SignatureAI = () => {
                     <img
                       src={verificationPreview}
                       alt="Signature preview"
-                      className="w-full h-full object-contain rounded-lg"
+                      className="w-full h-full object-contain rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => openImageModal([verificationPreview], 0)}
                     />
                   ) : (
                     <div className="text-center text-gray-500">
@@ -513,6 +558,53 @@ const SignatureAI = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Image Preview Modal */}
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+            <DialogHeader className="p-6 pb-0">
+              <DialogTitle>Image Preview</DialogTitle>
+            </DialogHeader>
+            <div className="relative p-6">
+              {modalImages.length > 0 && (
+                <>
+                  <img
+                    src={modalImages[modalImageIndex]}
+                    alt={`Preview ${modalImageIndex + 1}`}
+                    className="w-full h-auto max-h-[60vh] object-contain mx-auto"
+                  />
+                  
+                  {modalImages.length > 1 && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute left-4 top-1/2 transform -translate-y-1/2"
+                        onClick={goToPreviousImage}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2"
+                        onClick={goToNextImage}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      
+                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                        <div className="bg-black/50 text-white px-3 py-1 rounded-full text-sm">
+                          {modalImageIndex + 1} / {modalImages.length}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
