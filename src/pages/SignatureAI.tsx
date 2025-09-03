@@ -232,141 +232,7 @@ const SignatureAI = () => {
         {/* Main Content - Two Cards Side by Side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Left Card: Verification Section */}
-          <Card className="h-fit">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Scan className="w-5 h-5" />
-                Signature Verification
-              </CardTitle>
-              <CardDescription>
-                Upload or capture a signature to verify against trained models
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Camera/Upload Toggle */}
-              <div className="flex gap-2">
-                <Button
-                  variant={useCamera ? "default" : "outline"}
-                  size="sm"
-                  onClick={startCamera}
-                  className="flex items-center gap-2"
-                >
-                  <Camera className="w-4 h-4" />
-                  Camera
-                </Button>
-                <Button
-                  variant={!useCamera ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setUseCamera(false);
-                    stopCamera();
-                    verificationInputRef.current?.click();
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload
-                </Button>
-              </div>
-
-              {/* Camera View */}
-              {useCamera && (
-                <div className="space-y-3">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full max-w-sm rounded-lg border"
-                  />
-                  <div className="flex gap-2">
-                    <Button onClick={capturePhoto} size="sm">
-                      Capture
-                    </Button>
-                    <Button onClick={stopCamera} variant="outline" size="sm">
-                      Cancel
-                    </Button>
-                  </div>
-                  <canvas ref={canvasRef} className="hidden" />
-                </div>
-              )}
-
-              {/* File Upload */}
-              {!useCamera && (
-                <Input
-                  ref={verificationInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleVerificationFileChange}
-                  className="cursor-pointer"
-                />
-              )}
-
-              {/* Preview */}
-              {verificationPreview && (
-                <div className="space-y-2">
-                  <Label>Preview:</Label>
-                  <img
-                    src={verificationPreview}
-                    alt="Signature preview"
-                    className="max-w-full h-48 object-contain border rounded-lg"
-                  />
-                </div>
-              )}
-
-              {/* Verify Button */}
-              <Button
-                onClick={handleVerifySignature}
-                disabled={!verificationFile || isVerifying}
-                className="w-full"
-              >
-                {isVerifying ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    <Scan className="w-4 h-4 mr-2" />
-                    Verify Signature
-                  </>
-                )}
-              </Button>
-
-              {/* Verification Result */}
-              {verificationResult && (
-                <Alert className={verificationResult.match ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
-                  <div className="flex items-center gap-2">
-                    {verificationResult.match ? (
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-red-600" />
-                    )}
-                    <AlertDescription>
-                      <div className="space-y-2">
-                        <p>
-                          <strong>Result:</strong> {verificationResult.match ? 'Match Found' : 'No Match'}
-                        </p>
-                        <p>
-                          <strong>Confidence:</strong> {(verificationResult.score * 100).toFixed(1)}%
-                        </p>
-                        {verificationResult.predicted_student && (
-                          <p>
-                            <strong>Predicted Student:</strong> {verificationResult.predicted_student.firstname} {verificationResult.predicted_student.surname}
-                          </p>
-                        )}
-                        <p className="text-sm text-muted-foreground">
-                          {verificationResult.message}
-                        </p>
-                      </div>
-                    </AlertDescription>
-                  </div>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Right Card: Training Section */}
+          {/* Left Card: Model Training Section */}
           <Card className="h-fit">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -392,44 +258,58 @@ const SignatureAI = () => {
 
               <Separator />
 
-              {/* File Upload */}
+              {/* Large Square Preview Box for Training Images */}
               <div className="space-y-2">
-                <Label>Signature Samples</Label>
-                <FileUpload
-                  onChange={handleTrainingFilesChange}
-                  maxFiles={10}
-                  maxSize={5 * 1024 * 1024} // 5MB
-                  accept={{
-                    'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
-                  }}
-                />
+                <Label>Training Images Preview</Label>
+                <div className="w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                  {trainingFiles.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2 w-full h-full p-4 overflow-y-auto">
+                      {trainingFiles.map((item, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={item.preview}
+                            alt={`Sample ${index + 1}`}
+                            className="w-full h-20 object-cover rounded border"
+                          />
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => removeTrainingFile(index)}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500">
+                      <Upload className="w-8 h-8 mx-auto mb-2" />
+                      <p>No training images uploaded</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Uploaded Files Preview */}
-              {trainingFiles.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Uploaded Samples ({trainingFiles.length}):</Label>
-                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                    {trainingFiles.map((item, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={item.preview}
-                          alt={`Sample ${index + 1}`}
-                          className="w-full h-20 object-cover rounded border"
-                        />
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removeTrainingFile(index)}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Upload Button */}
+              <Button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.multiple = true;
+                  input.onchange = (e) => {
+                    const files = Array.from((e.target as HTMLInputElement).files || []);
+                    handleTrainingFilesChange(files);
+                  };
+                  input.click();
+                }}
+                variant="outline"
+                className="w-full"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Training Images
+              </Button>
 
               {/* Train Button */}
               <Button
@@ -485,6 +365,145 @@ const SignatureAI = () => {
                         )}
                         <p className="text-sm text-muted-foreground">
                           {trainingResult.message}
+                        </p>
+                      </div>
+                    </AlertDescription>
+                  </div>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Right Card: Signature Verification Section */}
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Scan className="w-5 h-5" />
+                Signature Verification
+              </CardTitle>
+              <CardDescription>
+                Upload or capture a signature to verify against trained models
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Camera/Upload Toggle */}
+              <div className="flex gap-2">
+                <Button
+                  variant={useCamera ? "default" : "outline"}
+                  size="sm"
+                  onClick={startCamera}
+                  className="flex items-center gap-2"
+                >
+                  <Camera className="w-4 h-4" />
+                  Camera
+                </Button>
+                <Button
+                  variant={!useCamera ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setUseCamera(false);
+                    stopCamera();
+                    verificationInputRef.current?.click();
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload
+                </Button>
+              </div>
+
+              {/* Large Square Preview Box */}
+              <div className="space-y-2">
+                <Label>Signature Preview</Label>
+                <div className="w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                  {useCamera ? (
+                    <div className="w-full h-full">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    </div>
+                  ) : verificationPreview ? (
+                    <img
+                      src={verificationPreview}
+                      alt="Signature preview"
+                      className="w-full h-full object-contain rounded-lg"
+                    />
+                  ) : (
+                    <div className="text-center text-gray-500">
+                      <Upload className="w-8 h-8 mx-auto mb-2" />
+                      <p>No signature selected</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Camera Controls */}
+              {useCamera && (
+                <div className="flex gap-2">
+                  <Button onClick={capturePhoto} size="sm" className="flex-1">
+                    Capture
+                  </Button>
+                  <Button onClick={stopCamera} variant="outline" size="sm" className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              )}
+
+              {/* Hidden File Input */}
+              <Input
+                ref={verificationInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleVerificationFileChange}
+                className="hidden"
+              />
+
+              {/* Verify Button */}
+              <Button
+                onClick={handleVerifySignature}
+                disabled={!verificationFile || isVerifying}
+                className="w-full"
+              >
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <Scan className="w-4 h-4 mr-2" />
+                    Verify Signature
+                  </>
+                )}
+              </Button>
+
+              {/* Verification Result */}
+              {verificationResult && (
+                <Alert className={verificationResult.match ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+                  <div className="flex items-center gap-2">
+                    {verificationResult.match ? (
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-600" />
+                    )}
+                    <AlertDescription>
+                      <div className="space-y-2">
+                        <p>
+                          <strong>Result:</strong> {verificationResult.match ? 'Match Found' : 'No Match'}
+                        </p>
+                        <p>
+                          <strong>Confidence:</strong> {(verificationResult.score * 100).toFixed(1)}%
+                        </p>
+                        {verificationResult.predicted_student && (
+                          <p>
+                            <strong>Predicted Student:</strong> {verificationResult.predicted_student.firstname} {verificationResult.predicted_student.surname}
+                          </p>
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                          {verificationResult.message}
                         </p>
                       </div>
                     </AlertDescription>
