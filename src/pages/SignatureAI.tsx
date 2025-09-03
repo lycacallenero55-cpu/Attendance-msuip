@@ -840,29 +840,32 @@ const SignatureAI = () => {
             <div className="relative p-6">
               {modalImages.length > 0 && (
                 <>
-                  <img
-                    src={modalImages[modalImageIndex]}
-                    alt={`Preview ${modalImageIndex + 1}`}
-                    className="w-full h-auto max-h-[60vh] object-contain mx-auto"
-                  />
-                  
-                  {/* Prev/Next Arrows */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="absolute left-4 top-1/2 transform -translate-y-1/2"
-                    onClick={goToPreviousImage}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2"
-                    onClick={goToNextImage}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
+                  <div className="relative group">
+                    <img
+                      src={modalImages[modalImageIndex]}
+                      alt={`Preview ${modalImageIndex + 1}`}
+                      className="w-full h-auto max-h-[60vh] object-contain mx-auto"
+                    />
+                    {/* Prev/Next Arrows - inside image boundary, show on hover */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hidden group-hover:flex absolute left-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-white opacity-70 hover:opacity-100"
+                      onClick={goToPreviousImage}
+                      aria-label="Previous"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hidden group-hover:flex absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-white opacity-70 hover:opacity-100"
+                      onClick={goToNextImage}
+                      aria-label="Next"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
 
                   {/* Count + Trash inline with translucent background (old style) */}
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
