@@ -20,7 +20,8 @@ import {
   User,
   ChevronLeft,
   CalendarDays,
-  BarChartBig
+  BarChartBig,
+  Brain
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
@@ -95,6 +96,7 @@ const getNavItems = (userRole: string = '') => {
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
       },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" },
       { icon: CalendarDays, label: "Allowed Terms", href: "/academic-year" },
       { icon: UserCog, label: "Accounts", href: "/accounts" }
     ];
@@ -122,6 +124,7 @@ const getNavItems = (userRole: string = '') => {
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
       },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" },
       { icon: UserCog, label: "Accounts", href: "/accounts" }
     ];
   } else if (userRole === 'Instructor') {
@@ -148,7 +151,8 @@ const getNavItems = (userRole: string = '') => {
         label: "Excuse Application", 
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
-      }
+      },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" }
     ];
   } else if (userRole === 'SSG officer') {
     // SSG Officer - no subject
@@ -173,7 +177,8 @@ const getNavItems = (userRole: string = '') => {
         label: "Excuse Application", 
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
-      }
+      },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" }
     ];
   } else if (userRole === 'ROTC officer') {
     // ROTC Officer - only Take Attendance, Profile, Log Out
