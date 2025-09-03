@@ -23,7 +23,8 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
-  MoreVertical
+  MoreVertical,
+  Trash2
 } from 'lucide-react';
 import { aiService } from '@/lib/aiService';
 
@@ -36,7 +37,9 @@ const SignatureAI = () => {
   const { toast } = useToast();
   
   // Training Section State
-  const [trainingFiles, setTrainingFiles] = useState<TrainingFile[]>([]);
+  const [genuineFiles, setGenuineFiles] = useState<TrainingFile[]>([]);
+  const [forgedFiles, setForgedFiles] = useState<TrainingFile[]>([]);
+  const [currentTrainingSet, setCurrentTrainingSet] = useState<'genuine' | 'forged'>('genuine');
   const [studentId, setStudentId] = useState<string>('');
   const [isTraining, setIsTraining] = useState(false);
   const [trainingResult, setTrainingResult] = useState<any>(null);
@@ -82,21 +85,34 @@ const SignatureAI = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Training Functions
-  const handleTrainingFilesChange = (files: File[]) => {
+  const handleTrainingFilesChange = (files: File[], setType: 'genuine' | 'forged') => {
     const newFiles = files.map(file => ({
       file,
       preview: URL.createObjectURL(file)
     }));
-    setTrainingFiles(prev => [...prev, ...newFiles]);
+    if (setType === 'genuine') {
+      setGenuineFiles(prev => [...prev, ...newFiles]);
+    } else {
+      setForgedFiles(prev => [...prev, ...newFiles]);
+    }
   };
 
-  const removeTrainingFile = (index: number) => {
-    setTrainingFiles(prev => {
-      const newFiles = [...prev];
-      URL.revokeObjectURL(newFiles[index].preview);
-      newFiles.splice(index, 1);
-      return newFiles;
-    });
+  const removeTrainingFile = (index: number, setType: 'genuine' | 'forged') => {
+    if (setType === 'genuine') {
+      setGenuineFiles(prev => {
+        const newFiles = [...prev];
+        URL.revokeObjectURL(newFiles[index].preview);
+        newFiles.splice(index, 1);
+        return newFiles;
+      });
+    } else {
+      setForgedFiles(prev => {
+        const newFiles = [...prev];
+        URL.revokeObjectURL(newFiles[index].preview);
+        newFiles.splice(index, 1);
+        return newFiles;
+      });
+    }
   };
 
   const handleTrainModel = async () => {
@@ -109,7 +125,7 @@ const SignatureAI = () => {
       return;
     }
 
-    if (trainingFiles.length === 0) {
+    if ((genuineFiles.length + forgedFiles.length) === 0) {
       toast({
         title: "Error", 
         description: "Please upload at least one signature sample",
@@ -213,10 +229,14 @@ const SignatureAI = () => {
   };
 
   // Modal Functions
-  const openImageModal = (images: string[], startIndex: number = 0) => {
+  type ModalContext = { kind: 'training', setType: 'genuine' | 'forged' } | { kind: 'verification' } | null;
+  const [modalContext, setModalContext] = useState<ModalContext>(null);
+
+  const openImageModal = (images: string[], startIndex: number = 0, context: ModalContext = null) => {
     setModalImages(images);
     setModalImageIndex(startIndex);
     setIsModalOpen(true);
+    setModalContext(context);
   };
 
   const closeImageModal = () => {
@@ -234,13 +254,33 @@ const SignatureAI = () => {
   };
 
   const removeAllTrainingFiles = () => {
-    trainingFiles.forEach(file => URL.revokeObjectURL(file.preview));
-    setTrainingFiles([]);
+    genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
+    forgedFiles.forEach(file => URL.revokeObjectURL(file.preview));
+    setGenuineFiles([]);
+    setForgedFiles([]);
     setIsDropdownOpen(false);
     toast({
       title: "Samples Removed",
       description: "All training samples have been removed",
     });
+  };
+
+  const deleteModalCurrentImage = () => {
+    if (!modalContext || modalContext.kind !== 'training') return;
+    const targetPreview = modalImages[modalImageIndex];
+    if (modalContext.setType === 'genuine') {
+      const idx = genuineFiles.findIndex(f => f.preview === targetPreview);
+      if (idx !== -1) removeTrainingFile(idx, 'genuine');
+      const updated = genuineFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
+      setModalImages(updated);
+    } else {
+      const idx = forgedFiles.findIndex(f => f.preview === targetPreview);
+      if (idx !== -1) removeTrainingFile(idx, 'forged');
+      const updated = forgedFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
+      setModalImages(updated);
+    }
+    setModalImageIndex(prev => Math.max(0, prev - (modalImages.length === 1 ? 0 : 1)));
+    if (modalImages.length <= 1) closeImageModal();
   };
 
   const handleVerifySignature = async () => {
@@ -388,7 +428,7 @@ const SignatureAI = () => {
                     <DropdownMenuItem 
                       onClick={removeAllTrainingFiles} 
                       className="text-red-600"
-                      disabled={trainingFiles.length === 0}
+                      disabled={(genuineFiles.length + forgedFiles.length) === 0}
                     >
                       Remove All Samples
                     </DropdownMenuItem>
@@ -398,7 +438,7 @@ const SignatureAI = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Upload Button */}
-              <div className="flex gap-2">
+              <div className="relative inline-flex items-center gap-2 group">
                 <Button
                   onClick={() => {
                     const input = document.createElement('input');
@@ -407,7 +447,7 @@ const SignatureAI = () => {
                     input.multiple = true;
                     input.onchange = (e) => {
                       const files = Array.from((e.target as HTMLInputElement).files || []);
-                      handleTrainingFilesChange(files);
+                      handleTrainingFilesChange(files, currentTrainingSet);
                     };
                     input.click();
                   }}
@@ -417,16 +457,74 @@ const SignatureAI = () => {
                   <Upload className="w-4 h-4" />
                   Upload
                 </Button>
+                {/* Hover options */}
+                <div className="absolute -right-[170px] top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.multiple = true;
+                      input.onchange = (e) => {
+                        const files = Array.from((e.target as HTMLInputElement).files || []);
+                        handleTrainingFilesChange(files, 'genuine');
+                        setCurrentTrainingSet('genuine');
+                      };
+                      input.click();
+                    }}
+                  >
+                    Genuine
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.multiple = true;
+                      input.onchange = (e) => {
+                        const files = Array.from((e.target as HTMLInputElement).files || []);
+                        handleTrainingFilesChange(files, 'forged');
+                        setCurrentTrainingSet('forged');
+                      };
+                      input.click();
+                    }}
+                  >
+                    Forged
+                  </Button>
+                </div>
               </div>
 
-              {/* Large Square Preview Box for Training Images */}
+              {/* Large Square Preview Box for Training Images (Genuine/Forged switch) */}
               <div className="space-y-2">
-                <Label>Training Images Preview</Label>
-                <div className="w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
-                  {trainingFiles.length > 0 ? (
+                <div className="flex items-center justify-between">
+                  <Label>Training Images Preview</Label>
+                  <div className="text-xs text-muted-foreground">{currentTrainingSet === 'genuine' ? 'Genuine' : 'Forged'}</div>
+                </div>
+                <div className="relative w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 group">
+                  {/* Hover Previous/Next inside box */}
+                  <button
+                    className="hidden group-hover:flex absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow"
+                    onClick={() => setCurrentTrainingSet(prev => prev === 'genuine' ? 'forged' : 'genuine')}
+                    aria-label="Previous"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="hidden group-hover:flex absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow"
+                    onClick={() => setCurrentTrainingSet(prev => prev === 'genuine' ? 'forged' : 'genuine')}
+                    aria-label="Next"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  {((currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).length > 0) ? (
                     <div className="grid grid-cols-3 gap-2 w-full h-full p-4 overflow-y-auto">
-                      {trainingFiles.map((item, index) => (
-                        <div key={index} className="relative group cursor-pointer" onClick={() => openImageModal(trainingFiles.map(f => f.preview), index)}>
+                      {(currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).map((item, index) => (
+                        <div key={index} className="relative group/itm cursor-pointer" onClick={() => openImageModal((currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).map(f => f.preview), index, { kind: 'training', setType: currentTrainingSet })}>
                           <img
                             src={item.preview}
                             alt={`Sample ${index + 1}`}
@@ -435,13 +533,13 @@ const SignatureAI = () => {
                           <Button
                             size="sm"
                             variant="destructive"
-                            className="absolute top-1 right-1 w-5 h-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                            className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover/itm:opacity-100 transition-opacity flex items-center justify-center"
                             onClick={(e) => {
                               e.stopPropagation();
-                              removeTrainingFile(index);
+                              removeTrainingFile(index, currentTrainingSet);
                             }}
                           >
-                            ×
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       ))}
@@ -449,7 +547,7 @@ const SignatureAI = () => {
                   ) : (
                     <div className="text-center text-gray-500">
                       <Upload className="w-8 h-8 mx-auto mb-2" />
-                      <p>No training images uploaded</p>
+                      <p>No {currentTrainingSet === 'genuine' ? 'genuine' : 'forged'} images uploaded</p>
                     </div>
                   )}
                 </div>
@@ -686,7 +784,8 @@ const SignatureAI = () => {
           </Card>
         </div>
 
-        {/* Image Preview Modal */}
+        {/* Image Preview Modal */
+        }
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] p-0">
             <DialogHeader className="p-6 pb-0">
@@ -726,6 +825,16 @@ const SignatureAI = () => {
                         </div>
                       </div>
                     </>
+                  )}
+
+                  {/* Trash action */}
+                  {modalContext && modalContext.kind === 'training' && (
+                    <div className="mt-4 flex justify-center">
+                      <Button variant="destructive" onClick={deleteModalCurrentImage} className="gap-2">
+                        <Trash2 className="w-4 h-4" />
+                        Delete Image
+                      </Button>
+                    </div>
                   )}
                 </>
               )}
