@@ -640,6 +640,7 @@ const SignatureAI = () => {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="text-xs hover:bg-transparent"
                             onClick={() =>
                               setVisibleCounts((prev) => ({
                                 ...prev,
