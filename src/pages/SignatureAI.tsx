@@ -22,6 +22,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   User,
   MoreVertical,
   Trash2
@@ -70,6 +71,7 @@ const SignatureAI = () => {
   const [selectedStudent, setSelectedStudent] = useState<SelectedStudent | null>(null);
   const [isStudentDialogOpen, setIsStudentDialogOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
+  const [isStudentCollapsed, setIsStudentCollapsed] = useState(false);
   // Mock students list for UI demonstration; replace with API in integration
   const mockStudents: SelectedStudent[] = [
     { id: '2023001', name: 'Juan Dela Cruz', program: 'BSIT', year: '3', section: 'A' },
@@ -337,65 +339,113 @@ const SignatureAI = () => {
 
         {/* Student Selection Card */}
         <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <User className="w-5 h-5" />
-                  Select Student
-                </CardTitle>
-                <CardDescription>
-                  Choose a student to train the AI model for signature verification
-                </CardDescription>
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => setIsStudentDialogOpen(true)}
-                  >
-                    {selectedStudent ? 'Change' : 'Select'}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {selectedStudent ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-                <div>
-                  <Label className="text-muted-foreground">ID</Label>
-                  <div className="font-medium">{selectedStudent.id}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Name</Label>
-                  <div className="font-medium">{selectedStudent.name}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Program</Label>
-                  <div className="font-medium">{selectedStudent.program}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Year</Label>
-                  <div className="font-medium">{selectedStudent.year}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Section</Label>
-                  <div className="font-medium">{selectedStudent.section}</div>
-                </div>
+          <CardHeader className="py-3">
+            {/* Collapsed header */}
+            {isStudentCollapsed ? (
+              <div className="flex items-center justify-between">
+                <button
+                  className="flex items-center gap-2 text-left"
+                  onClick={() => setIsStudentCollapsed(false)}
+                >
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`} />
+                  <span className="text-sm font-medium">
+                    {selectedStudent ? selectedStudent.name : 'No student selected'}
+                  </span>
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsStudentDialogOpen(true)}>
+                      {selectedStudent ? 'Change' : 'Select'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsStudentCollapsed(false)}>
+                      Expand
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground">No student selected.</div>
+              // Expanded header
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="flex items-center gap-2">
+                    <button
+                      className="flex items-center"
+                      onClick={() => setIsStudentCollapsed(true)}
+                      aria-label="Collapse"
+                    >
+                      <ChevronDown className={`w-4 h-4 mr-2 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`} />
+                    </button>
+                    <User className="w-5 h-5" />
+                    Select Student
+                  </CardTitle>
+                  <CardDescription>
+                    Choose a student to train the AI model for signature verification
+                  </CardDescription>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsStudentDialogOpen(true)}>
+                      {selectedStudent ? 'Change' : 'Select'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsStudentCollapsed(true)}>
+                      Collapse
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
-          </CardContent>
+          </CardHeader>
+          {/* Collapsible content */}
+          <div className={`overflow-hidden transition-all ${isStudentCollapsed ? 'max-h-0 py-0' : 'max-h-[500px]'}`}>
+            {!isStudentCollapsed && (
+              <CardContent>
+                {selectedStudent ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+                    <div>
+                      <Label className="text-muted-foreground">ID</Label>
+                      <div className="font-medium">{selectedStudent.id}</div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Name</Label>
+                      <div className="font-medium">{selectedStudent.name}</div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Program</Label>
+                      <div className="font-medium">{selectedStudent.program}</div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Year</Label>
+                      <div className="font-medium">{selectedStudent.year}</div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Section</Label>
+                      <div className="font-medium">{selectedStudent.section}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No student selected.</div>
+                )}
+              </CardContent>
+            )}
+          </div>
         </Card>
 
         {/* Main Content - Two Cards Side by Side */}
