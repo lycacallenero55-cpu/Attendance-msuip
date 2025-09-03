@@ -230,6 +230,22 @@ const SignatureAI = () => {
     saveSessionState();
   }, [selectedStudent, genuineFiles, forgedFiles, currentTrainingSet, visibleCounts]);
 
+  // Ensure state is persisted on internal navigation or tab hide
+  React.useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // Best-effort save before the page is backgrounded or navigating away
+        saveSessionState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Save once more on unmount to capture any last-moment changes
+      saveSessionState();
+    };
+  }, [selectedStudent, genuineFiles, forgedFiles, currentTrainingSet, visibleCounts]);
+
   React.useEffect(() => {
     setIsStudentSearching(true);
     const t = setTimeout(() => {
