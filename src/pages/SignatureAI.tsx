@@ -59,6 +59,7 @@ const SignatureAI = () => {
   
   // Dropdown State
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isConfirmRemoveOpen, setIsConfirmRemoveOpen] = useState(false);
 
   // Student Selection State
   interface SelectedStudent {
@@ -78,17 +79,59 @@ const SignatureAI = () => {
     { id: '2023002', name: 'Maria Santos', program: 'BSCS', year: '2', section: 'B' },
     { id: '2023003', name: 'John Reyes', program: 'BSIS', year: '1', section: 'C' },
   ];
-  const filteredStudents = mockStudents.filter(s => 
-    s.id.includes(studentSearch.trim()) || s.name.toLowerCase().includes(studentSearch.trim().toLowerCase())
-  );
+  const [debouncedStudentSearch, setDebouncedStudentSearch] = useState('');
+  const [isStudentSearching, setIsStudentSearching] = useState(false);
+  React.useEffect(() => {
+    setIsStudentSearching(true);
+    const t = setTimeout(() => {
+      setDebouncedStudentSearch(studentSearch.trim());
+      setIsStudentSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [studentSearch]);
+
+  const filteredStudents = mockStudents.filter((s) => {
+    if (!debouncedStudentSearch) return true;
+    return (
+      s.id.includes(debouncedStudentSearch) ||
+      s.name.toLowerCase().includes(debouncedStudentSearch.toLowerCase())
+    );
+  });
   
   const verificationInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Training Functions
+  const validateFiles = (files: File[]): File[] => {
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/jpg']);
+    const valid: File[] = [];
+    let rejected = 0;
+    files.forEach((f) => {
+      if (!allowedTypes.has(f.type)) {
+        rejected++;
+        return;
+      }
+      if (f.size > MAX_SIZE_BYTES) {
+        rejected++;
+        return;
+      }
+      valid.push(f);
+    });
+    if (rejected > 0) {
+      toast({
+        title: 'Some files were ignored',
+        description: 'Only PNG and JPEG up to 5MB are allowed.',
+        variant: 'destructive',
+      });
+    }
+    return valid;
+  };
+
   const handleTrainingFilesChange = (files: File[], setType: 'genuine' | 'forged') => {
-    const newFiles = files.map(file => ({
+    const safeFiles = validateFiles(files);
+    const newFiles = safeFiles.map(file => ({
       file,
       preview: URL.createObjectURL(file)
     }));
@@ -169,7 +212,9 @@ const SignatureAI = () => {
 
   // Verification Functions
   const handleVerificationFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const raw = e.target.files?.[0];
+    const valid = raw ? validateFiles([raw]) : [];
+    const file = valid[0];
     if (file) {
       setVerificationFile(file);
       setVerificationPreview(URL.createObjectURL(file));
@@ -480,7 +525,7 @@ const SignatureAI = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem 
-                      onClick={removeAllTrainingFiles} 
+                      onClick={() => setIsConfirmRemoveOpen(true)} 
                       className="text-red-600"
                       disabled={(genuineFiles.length + forgedFiles.length) === 0}
                     >
@@ -566,12 +611,13 @@ const SignatureAI = () => {
 
                   {((currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).length > 0) ? (
                     <div className="grid grid-cols-3 gap-2 w-full h-full p-4 overflow-y-auto">
-                      {(currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).map((item, index) => (
+                      {(currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).slice(0, 60).map((item, index) => (
                         <div key={index} className="relative group/itm cursor-pointer" onClick={() => openImageModal((currentTrainingSet === 'genuine' ? genuineFiles : forgedFiles).map(f => f.preview), index, { kind: 'training', setType: currentTrainingSet })}>
                           <img
                             src={item.preview}
                             alt={`Sample ${index + 1}`}
                             className="w-full h-16 object-cover rounded border hover:opacity-80 transition-opacity"
+                            loading="lazy"
                           />
                           <Button
                             size="sm"
@@ -897,7 +943,9 @@ const SignatureAI = () => {
                 onChange={(e) => setStudentSearch(e.target.value)}
               />
               <div className="max-h-64 overflow-auto border rounded-md">
-                {filteredStudents.length === 0 ? (
+                {isStudentSearching ? (
+                  <div className="p-4 text-sm text-muted-foreground">Searching…</div>
+                ) : filteredStudents.length === 0 ? (
                   <div className="p-4 text-sm text-muted-foreground">No results</div>
                 ) : (
                   <ul className="divide-y">
@@ -919,6 +967,21 @@ const SignatureAI = () => {
                   </ul>
                 )}
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+        {/* Confirm Remove All Samples */}
+        <Dialog open={isConfirmRemoveOpen} onOpenChange={setIsConfirmRemoveOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Remove all samples?</DialogTitle>
+            </DialogHeader>
+            <div className="text-sm text-muted-foreground">
+              This action will remove all Genuine and Forged samples. This cannot be undone.
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" size="sm" onClick={() => setIsConfirmRemoveOpen(false)}>Cancel</Button>
+              <Button variant="destructive" size="sm" onClick={() => { removeAllTrainingFiles(); setIsConfirmRemoveOpen(false); }}>Remove</Button>
             </div>
           </DialogContent>
         </Dialog>
