@@ -28,6 +28,8 @@ import {
   Trash2
 } from 'lucide-react';
 import { aiService } from '@/lib/aiService';
+import { fetchStudents } from '@/lib/supabaseService';
+import type { Student } from '@/types';
 
 interface TrainingFile {
   file: File;
@@ -63,25 +65,42 @@ const SignatureAI = () => {
   const [visibleCounts, setVisibleCounts] = useState<{ genuine: number; forged: number }>({ genuine: 60, forged: 60 });
 
   // Student Selection State
-  interface SelectedStudent {
-    id: string;
-    name: string;
-    program: string;
-    year: string;
-    section: string;
-  }
-  const [selectedStudent, setSelectedStudent] = useState<SelectedStudent | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isStudentDialogOpen, setIsStudentDialogOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
   const [isStudentCollapsed, setIsStudentCollapsed] = useState(false);
-  // Mock students list for UI demonstration; replace with API in integration
-  const mockStudents: SelectedStudent[] = [
-    { id: '2023001', name: 'Juan Dela Cruz', program: 'BSIT', year: '3', section: 'A' },
-    { id: '2023002', name: 'Maria Santos', program: 'BSCS', year: '2', section: 'B' },
-    { id: '2023003', name: 'John Reyes', program: 'BSIS', year: '1', section: 'C' },
-  ];
   const [debouncedStudentSearch, setDebouncedStudentSearch] = useState('');
   const [isStudentSearching, setIsStudentSearching] = useState(false);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+
+  // Fetch students on component mount
+  React.useEffect(() => {
+    const loadStudents = async () => {
+      setIsLoadingStudents(true);
+      try {
+        const students = await fetchStudents();
+        // Sort alphabetically by name (firstname + surname)
+        const sortedStudents = students.sort((a, b) => {
+          const nameA = `${a.firstname} ${a.surname}`.toLowerCase();
+          const nameB = `${b.firstname} ${b.surname}`.toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setAllStudents(sortedStudents);
+      } catch (error) {
+        console.error('Error loading students:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load students",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingStudents(false);
+      }
+    };
+    loadStudents();
+  }, []);
+
   React.useEffect(() => {
     setIsStudentSearching(true);
     const t = setTimeout(() => {
@@ -91,13 +110,12 @@ const SignatureAI = () => {
     return () => clearTimeout(t);
   }, [studentSearch]);
 
-  const filteredStudents = mockStudents.filter((s) => {
-    if (!debouncedStudentSearch) return true;
-    return (
-      s.id.includes(debouncedStudentSearch) ||
-      s.name.toLowerCase().includes(debouncedStudentSearch.toLowerCase())
-    );
-  });
+  const filteredStudents = debouncedStudentSearch 
+    ? allStudents.filter((s) => (
+        s.student_id.includes(debouncedStudentSearch) ||
+        `${s.firstname} ${s.surname}`.toLowerCase().includes(debouncedStudentSearch.toLowerCase())
+      ))
+    : allStudents.slice(0, 5); // Show first 5 by default
   
   const verificationInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -162,7 +180,7 @@ const SignatureAI = () => {
   };
 
   const handleTrainModel = async () => {
-    if (!studentId.trim()) {
+    if (!selectedStudent) {
       toast({
         title: "Error",
         description: "Please select a student",
@@ -184,7 +202,7 @@ const SignatureAI = () => {
     setTrainingResult(null);
 
     try {
-      const result = await aiService.trainStudent(parseInt(studentId));
+      const result = await aiService.trainStudent(selectedStudent.id);
       setTrainingResult(result);
       
       if (result.success) {
@@ -391,7 +409,7 @@ const SignatureAI = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-left">
                   <span className="text-sm font-medium">
-                    {selectedStudent?.name ?? 'No student selected'}
+                    {selectedStudent ? `${selectedStudent.firstname} ${selectedStudent.surname}` : 'No student selected'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -471,11 +489,11 @@ const SignatureAI = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
                     <div>
                       <Label className="text-muted-foreground">ID</Label>
-                      <div className="font-medium">{selectedStudent?.id ?? '—'}</div>
+                      <div className="font-medium">{selectedStudent?.student_id ?? '—'}</div>
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Name</Label>
-                      <div className="font-medium">{selectedStudent?.name ?? '—'}</div>
+                      <div className="font-medium">{selectedStudent ? `${selectedStudent.firstname} ${selectedStudent.surname}` : '—'}</div>
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Program</Label>
@@ -961,24 +979,25 @@ const SignatureAI = () => {
                 onChange={(e) => setStudentSearch(e.target.value)}
               />
               <div className="max-h-64 overflow-auto border rounded-md">
-                {isStudentSearching ? (
+                {isLoadingStudents ? (
+                  <div className="p-4 text-sm text-muted-foreground">Loading students…</div>
+                ) : isStudentSearching ? (
                   <div className="p-4 text-sm text-muted-foreground">Searching…</div>
                 ) : filteredStudents.length === 0 ? (
                   <div className="p-4 text-sm text-muted-foreground">No results</div>
                 ) : (
                   <ul className="divide-y">
                     {filteredStudents.map((s) => (
-                      <li key={s.id ?? Math.random()}>
+                      <li key={s.id}>
                         <button
                           className="w-full text-left p-3 hover:bg-muted/50"
                           onClick={() => {
                             setSelectedStudent(s);
-                            if (s && s.id) setStudentId(s.id);
                             setIsStudentDialogOpen(false);
                           }}
                         >
-                          <div className="font-medium">{s?.name ?? 'Unknown'}</div>
-                          <div className="text-xs text-muted-foreground">ID: {s?.id ?? '—'} • {s?.program ?? '—'} • Year {s?.year ?? '—'} • Sec {s?.section ?? '—'}</div>
+                          <div className="font-medium">{`${s.firstname} ${s.surname}`}</div>
+                          <div className="text-xs text-muted-foreground">ID: {s.student_id} • {s.program} • Year {s.year} • Sec {s.section}</div>
                         </button>
                       </li>
                     ))}
