@@ -65,6 +65,103 @@ const SignatureAI = () => {
   const [visibleCounts, setVisibleCounts] = useState<{ genuine: number; forged: number }>({ genuine: 60, forged: 60 });
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = React.useCallback(() => setIsDirty(true), []);
+  const STORAGE_KEY = 'signatureAIState:v1';
+
+  type SerializableStudent = Pick<Student, 'id' | 'student_id' | 'firstname' | 'surname' | 'program' | 'year' | 'section'>;
+  type SerializableTraining = { name: string; type: string; size: number; dataUrl: string };
+
+  const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const dataUrlToFile = (dataUrl: string, name: string, type: string): File => {
+    const arr = dataUrl.split(',');
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    return new File([u8arr], name, { type });
+  };
+
+  const saveSessionState = async (extra?: { addGenuine?: File[]; addForged?: File[] }) => {
+    try {
+      // Prepare serializable lists. Append newly added files efficiently.
+      const genuineSerial: SerializableTraining[] = [];
+      for (const item of genuineFiles) {
+        genuineSerial.push({
+          name: item.file.name,
+          type: item.file.type,
+          size: item.file.size,
+          dataUrl: await fileToDataUrl(item.file),
+        });
+      }
+      const forgedSerial: SerializableTraining[] = [];
+      for (const item of forgedFiles) {
+        forgedSerial.push({
+          name: item.file.name,
+          type: item.file.type,
+          size: item.file.size,
+          dataUrl: await fileToDataUrl(item.file),
+        });
+      }
+      const studentSerial: SerializableStudent | null = selectedStudent
+        ? {
+            id: selectedStudent.id,
+            student_id: selectedStudent.student_id,
+            firstname: selectedStudent.firstname,
+            surname: selectedStudent.surname,
+            program: selectedStudent.program,
+            year: selectedStudent.year,
+            section: selectedStudent.section,
+          }
+        : null;
+      const payload = {
+        selectedStudent: studentSerial,
+        currentTrainingSet,
+        visibleCounts,
+        genuine: genuineSerial,
+        forged: forgedSerial,
+      };
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('Failed saving session state', e);
+    }
+  };
+
+  const loadSessionState = async () => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        selectedStudent: SerializableStudent | null;
+        currentTrainingSet: 'genuine' | 'forged';
+        visibleCounts: { genuine: number; forged: number };
+        genuine: SerializableTraining[];
+        forged: SerializableTraining[];
+      };
+      if (parsed.selectedStudent) {
+        setSelectedStudent(parsed.selectedStudent as unknown as Student);
+      }
+      setVisibleCounts(parsed.visibleCounts || { genuine: 60, forged: 60 });
+      setCurrentTrainingSet(parsed.currentTrainingSet || 'genuine');
+      // Rehydrate files
+      const newGenuine: TrainingFile[] = parsed.genuine?.map((s) => {
+        const f = dataUrlToFile(s.dataUrl, s.name, s.type);
+        return { file: f, preview: URL.createObjectURL(f) };
+      }) || [];
+      const newForged: TrainingFile[] = parsed.forged?.map((s) => {
+        const f = dataUrlToFile(s.dataUrl, s.name, s.type);
+        return { file: f, preview: URL.createObjectURL(f) };
+      }) || [];
+      setGenuineFiles(newGenuine);
+      setForgedFiles(newForged);
+    } catch (e) {
+      console.warn('Failed loading session state', e);
+    }
+  };
 
   // Warn before unload if there are any interactions/changes
   React.useEffect(() => {
@@ -113,6 +210,16 @@ const SignatureAI = () => {
     };
     loadStudents();
   }, []);
+
+  // Restore persisted state on mount
+  React.useEffect(() => {
+    loadSessionState();
+  }, []);
+
+  // Persist on critical state changes
+  React.useEffect(() => {
+    saveSessionState();
+  }, [selectedStudent, genuineFiles, forgedFiles, currentTrainingSet, visibleCounts]);
 
   React.useEffect(() => {
     setIsStudentSearching(true);
