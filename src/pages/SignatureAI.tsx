@@ -637,10 +637,8 @@ const SignatureAI = () => {
                       ))}
                       {(currentTrainingSet === 'genuine' ? genuineFiles.length : forgedFiles.length) > visibleCounts[currentTrainingSet] && (
                         <div className="col-span-3 flex justify-center pt-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-xs hover:bg-transparent"
+                          <button
+                            className="text-xs text-foreground hover:underline"
                             onClick={() =>
                               setVisibleCounts((prev) => ({
                                 ...prev,
@@ -649,7 +647,7 @@ const SignatureAI = () => {
                             }
                           >
                             Show more
-                          </Button>
+                          </button>
                         </div>
                       )}
                     </div>
