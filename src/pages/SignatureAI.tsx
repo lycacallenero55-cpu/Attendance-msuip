@@ -349,12 +349,21 @@ const SignatureAI = () => {
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
+                    onClick={() => setIsStudentCollapsed(false)}
+                    aria-label="Expand"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-opacity"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -365,15 +374,6 @@ const SignatureAI = () => {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
-                    onClick={() => setIsStudentCollapsed(false)}
-                    aria-label="Expand"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             ) : (
@@ -388,12 +388,21 @@ const SignatureAI = () => {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
+                    onClick={() => setIsStudentCollapsed(true)}
+                    aria-label="Collapse"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-opacity"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -404,15 +413,6 @@ const SignatureAI = () => {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
-                    onClick={() => setIsStudentCollapsed(true)}
-                    aria-label="Collapse"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             )}
@@ -473,7 +473,7 @@ const SignatureAI = () => {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-opacity"
                     >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
@@ -496,7 +496,7 @@ const SignatureAI = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 hover:bg-transparent"
                   onClick={() => {
                     setCurrentTrainingSet('forged');
                     const input = document.createElement('input');
@@ -677,7 +677,7 @@ const SignatureAI = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 hover:bg-transparent transition-opacity"
                     >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
