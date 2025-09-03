@@ -241,8 +241,7 @@ const Students = () => {
             ...student,
             middlename: student.middlename || '',
             email: student.email || '',
-            contact_no: student.contact_no || '',
-            status: student.status || 'active'
+            contact_no: student.contact_no || ''
           }))
         : [];
       
@@ -661,7 +660,7 @@ const Students = () => {
           <div className="flex flex-col">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-1">
               <div>
-                <h1 className="text-2xl font-bold text-education-navy mb-0.5">Students</h1>
+                <h1 className="text-lg font-bold text-education-navy">STUDENTS</h1>
                 <p className="text-sm text-muted-foreground">
                   Manage and monitor student records
                 </p>

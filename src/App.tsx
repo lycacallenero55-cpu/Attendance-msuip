@@ -18,6 +18,7 @@ import ExcuseApplication from "./pages/ExcuseApplication";
 import AllowedTerms from "./pages/AllowedTerms";
 import Subjects from "./pages/Subjects";
 import Profile from "./pages/Profile";
+import SignatureAI from "./pages/SignatureAI";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SidebarProvider } from "./contexts/SidebarContext";
 import { useAuth } from "./hooks/useAuth";
@@ -154,6 +155,16 @@ const AppRoutes = () => {
         <ProtectedRoute>
           <RoleProtectedRoute allowedRoles={['admin', 'Instructor']}>
             <Subjects />
+          </RoleProtectedRoute>
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/signature-ai"
+      element={
+        <ProtectedRoute>
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer']}>
+            <SignatureAI />
           </RoleProtectedRoute>
         </ProtectedRoute>
       }

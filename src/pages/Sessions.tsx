@@ -787,7 +787,7 @@ const Schedule = () => {
         
         try {
           // Update the backend
-          await updateSession(sessionId, sessionForSupabase);
+          await updateSession(sessionId, { ...sessionForSupabase, capacity: parseInt(sessionForSupabase.capacity) || 0 });
           
           // Calculate student count for the updated session
           let studentCount = 0;
@@ -847,7 +847,7 @@ const Schedule = () => {
       } else {
         // Add new session
         try {
-          const newSession = await createSession(sessionForSupabase);
+          const newSession = await createSession({ ...sessionForSupabase, capacity: parseInt(sessionForSupabase.capacity) || 0 });
           
           // Calculate student count for the new session
           let studentCount = 0;
@@ -888,6 +888,8 @@ const Schedule = () => {
             time: `${sessionForSupabase.time_in} - ${sessionForSupabase.time_out}`,
             students: studentCount,
             created_at: newSession.created_at || new Date().toISOString(),
+            location: '',
+            instructor: '',
             updated_at: newSession.updated_at || new Date().toISOString(),
             created_by_user_id: newSession.created_by_user_id
           };
@@ -1186,7 +1188,7 @@ const Schedule = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-education-navy">Schedule</h1>
+            <h1 className="text-lg font-bold text-education-navy">SCHEDULE</h1>
             <p className="text-sm text-muted-foreground">Manage and view scheduled sessions</p>
           </div>
           <Button 

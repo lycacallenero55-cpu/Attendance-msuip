@@ -107,8 +107,8 @@ const AllowedTerms = () => {
       <div className="flex-1 space-y-4 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Allowed Terms</h2>
-            <p className="text-muted-foreground">Add and manage allowed academic terms</p>
+            <h2 className="text-lg font-bold tracking-tight">ALLOWED TERMS</h2>
+            <p className="text-sm text-muted-foreground">Add and manage allowed academic terms</p>
           </div>
           <Button 
             className="bg-gradient-primary shadow-glow h-9"

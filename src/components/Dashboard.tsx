@@ -329,13 +329,13 @@ const Dashboard = () => {
 
   const getDashboardTitle = () => {
     const roleLabels = {
-      admin: 'Admin',
-      Instructor: 'Instructor',
-      'SSG officer': 'SSG Officer',
-      'ROTC admin': 'ROTC Admin',
-      'ROTC officer': 'ROTC Officer'
+      admin: 'ADMIN',
+      'ROTC admin': 'ROTC ADMIN',
+      Instructor: 'INSTRUCTOR',
+      'SSG officer': 'SSG OFFICER',
+      'ROTC officer': 'ROTC OFFICER'
     };
-    return `${roleLabels[userRole as keyof typeof roleLabels] || 'User'} Dashboard`;
+    return `${roleLabels[userRole as keyof typeof roleLabels] || 'User'} DASHBOARD`;
   };
 
   const getUserDisplayName = () => {
@@ -374,8 +374,8 @@ const Dashboard = () => {
     <div className="flex-1 space-y-4 px-6 py-4 opacity-100 transition-opacity duration-300">
       {/* Header Section */}
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight text-gray-900">{getDashboardTitle()}</h2>
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-gray-900">{getDashboardTitle()}</h2>
           <p className="text-sm text-gray-600">
             {getGreeting()}! Here's your attendance overview.
           </p>
