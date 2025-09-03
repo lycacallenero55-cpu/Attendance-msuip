@@ -343,73 +343,77 @@ const SignatureAI = () => {
             {/* Collapsed header */}
             {isStudentCollapsed ? (
               <div className="flex items-center justify-between">
-                <button
-                  className="flex items-center gap-2 text-left"
-                  onClick={() => setIsStudentCollapsed(false)}
-                >
-                  <ChevronDown className={`w-4 h-4 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`} />
+                <div className="flex items-center gap-2 text-left">
                   <span className="text-sm font-medium">
-                    {selectedStudent ? selectedStudent.name : 'No student selected'}
+                    {selectedStudent?.name ?? 'No student selected'}
                   </span>
-                </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setIsStudentDialogOpen(true)}>
-                      {selectedStudent ? 'Change' : 'Select'}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setIsStudentCollapsed(false)}>
-                      Expand
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                </div>
+                <div className="flex items-center gap-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setIsStudentDialogOpen(true)}>
+                        {selectedStudent ? 'Change' : 'Select'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
+                    onClick={() => setIsStudentCollapsed(false)}
+                    aria-label="Expand"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ) : (
               // Expanded header
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center gap-2">
-                    <button
-                      className="flex items-center"
-                      onClick={() => setIsStudentCollapsed(true)}
-                      aria-label="Collapse"
-                    >
-                      <ChevronDown className={`w-4 h-4 mr-2 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`} />
-                    </button>
-                    <User className="w-5 h-5" />
                     Select Student
                   </CardTitle>
                   <CardDescription>
                     Choose a student to train the AI model for signature verification
                   </CardDescription>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setIsStudentDialogOpen(true)}>
-                      {selectedStudent ? 'Change' : 'Select'}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setIsStudentCollapsed(true)}>
-                      Collapse
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="flex items-center gap-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-opacity"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setIsStudentDialogOpen(true)}>
+                        {selectedStudent ? 'Change' : 'Select'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-6 w-6 p-0 opacity-40 hover:opacity-100 transition-transform ${isStudentCollapsed ? 'rotate-180' : ''}`}
+                    onClick={() => setIsStudentCollapsed(true)}
+                    aria-label="Collapse"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardHeader>
@@ -421,23 +425,23 @@ const SignatureAI = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
                     <div>
                       <Label className="text-muted-foreground">ID</Label>
-                      <div className="font-medium">{selectedStudent.id}</div>
+                      <div className="font-medium">{selectedStudent?.id ?? '—'}</div>
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Name</Label>
-                      <div className="font-medium">{selectedStudent.name}</div>
+                      <div className="font-medium">{selectedStudent?.name ?? '—'}</div>
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Program</Label>
-                      <div className="font-medium">{selectedStudent.program}</div>
+                      <div className="font-medium">{selectedStudent?.program ?? '—'}</div>
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Year</Label>
-                      <div className="font-medium">{selectedStudent.year}</div>
+                      <div className="font-medium">{selectedStudent?.year ?? '—'}</div>
                     </div>
                     <div>
                       <Label className="text-muted-foreground">Section</Label>
-                      <div className="font-medium">{selectedStudent.section}</div>
+                      <div className="font-medium">{selectedStudent?.section ?? '—'}</div>
                     </div>
                   </div>
                 ) : (
@@ -889,17 +893,17 @@ const SignatureAI = () => {
                 ) : (
                   <ul className="divide-y">
                     {filteredStudents.map((s) => (
-                      <li key={s.id}>
+                      <li key={s.id ?? Math.random()}>
                         <button
                           className="w-full text-left p-3 hover:bg-muted/50"
                           onClick={() => {
                             setSelectedStudent(s);
-                            setStudentId(s.id);
+                            if (s && s.id) setStudentId(s.id);
                             setIsStudentDialogOpen(false);
                           }}
                         >
-                          <div className="font-medium">{s.name}</div>
-                          <div className="text-xs text-muted-foreground">ID: {s.id} • {s.program} • Year {s.year} • Sec {s.section}</div>
+                          <div className="font-medium">{s?.name ?? 'Unknown'}</div>
+                          <div className="text-xs text-muted-foreground">ID: {s?.id ?? '—'} • {s?.program ?? '—'} • Year {s?.year ?? '—'} • Sec {s?.section ?? '—'}</div>
                         </button>
                       </li>
                     ))}
