@@ -609,5 +609,9 @@ class WarmupScheduler(keras.callbacks.Callback):
     def on_epoch_begin(self, epoch, logs=None):
         if epoch < self.warmup_epochs:
             lr = self.initial_lr + (self.target_lr - self.initial_lr) * (epoch / self.warmup_epochs)
-            keras.backend.set_value(self.model.optimizer.lr, lr)
+            # FIXED: Handle both old and new Keras versions
+            if hasattr(self.model.optimizer, 'learning_rate'):
+                keras.backend.set_value(self.model.optimizer.learning_rate, lr)
+            else:
+                keras.backend.set_value(self.model.optimizer.lr, lr)
             logger.debug(f"Epoch {epoch}: Learning rate warmed up to {lr:.6f}")
