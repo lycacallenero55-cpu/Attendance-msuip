@@ -6,12 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, X, UserPlus, FileDown, Trash2, Edit, Check, Download, Mail, Phone, GraduationCap, Table, LayoutGrid, Upload, FolderPlus, FileImage, Users, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from "lucide-react";
+import { Search, X, UserPlus, FileDown, Trash2, Edit, Check, Download, Mail, Phone, GraduationCap, Table, LayoutGrid, Users, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import StudentImport from "@/components/StudentImport";
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { aiService } from "@/lib/aiService";
 import { debounce } from "lodash";
 
 interface Student {
@@ -61,17 +60,6 @@ const Students = () => {
   const [uniquePrograms, setUniquePrograms] = useState<string[]>([]);
   const [uniqueYears, setUniqueYears] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
-  const [uploading, setUploading] = useState<number | null>(null);
-  
-  // Upload modal state
-  interface FileWithPreview extends File {
-    preview: string;
-  }
-  const [selectedFiles, setSelectedFiles] = useState<FileWithPreview[]>([]);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [currentStudent, setCurrentStudent] = useState<{id: number, name: string} | null>(null);
-  const [previewImage, setPreviewImage] = useState<{url: string, name: string} | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Performance tracking
   const [isSearching, setIsSearching] = useState(false);
@@ -366,153 +354,6 @@ const Students = () => {
     }, 500);
   };
 
-  // Upload functionality (keeping your existing logic)
-  const handleUploadClick = (student: Student) => {
-    setCurrentStudent({
-      id: student.id,
-      name: `${student.firstname} ${student.surname}`
-    });
-    setShowUploadModal(true);
-  };
-
-  const createPreview = (file: File): Promise<FileWithPreview> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const fileWithPreview = Object.assign(file, {
-          preview: URL.createObjectURL(file)
-        }) as FileWithPreview;
-        resolve(fileWithPreview);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      const filesWithPreviews = await Promise.all(
-        files.map(file => createPreview(file))
-      );
-      setSelectedFiles(prev => [...prev, ...filesWithPreviews]);
-    }
-    if (e.target) {
-      e.target.value = '';
-    }
-  };
-
-  // Clean up object URLs
-  useEffect(() => {
-    return () => {
-      selectedFiles.forEach(file => URL.revokeObjectURL(file.preview));
-      if (previewImage) {
-        URL.revokeObjectURL(previewImage.url);
-      }
-    };
-  }, [selectedFiles, previewImage]);
-
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const resetUpload = () => {
-    setSelectedFiles([]);
-    setShowUploadModal(false);
-    setCurrentStudent(null);
-    setUploading(null);
-    setPreviewImage(null);
-  };
-
-  const openPreview = (file: FileWithPreview) => {
-    const previewUrl = URL.createObjectURL(file);
-    setPreviewImage({
-      url: previewUrl,
-      name: file.name
-    });
-  };
-
-  const closePreview = () => {
-    setPreviewImage(null);
-  };
-
-  const handleSubmit = async () => {
-    if (!currentStudent || selectedFiles.length === 0) return;
-    
-    try {
-      const files = Array.from(selectedFiles);
-      const result = await handleFileUpload(currentStudent.id, files as unknown as FileList);
-      toast.success(`Successfully uploaded ${result?.urls?.length || 0} signature(s) for ${currentStudent.name}`);
-      resetUpload();
-    } catch (error) {
-      console.error('Error uploading signatures:', error);
-      toast.error('Failed to upload signatures');
-    } 
-  };
-
-  const handleFileUpload = async (studentId: number, files: FileList) => {
-    if (!files || files.length === 0) return;
-    
-    setUploading(studentId);
-    
-    try {
-      const uploadPromises = Array.from(files).map(async (file) => {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${studentId}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-        const filePath = `signatures/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('signatures')
-          .upload(filePath, file);
-          
-        if (uploadError) throw uploadError;
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('signatures')
-          .getPublicUrl(filePath);
-        
-        return publicUrl;
-      });
-      
-      const urls = await Promise.all(uploadPromises);
-      
-      if (urls.length > 0) {
-        const { error: updateError } = await supabase
-          .from('students')
-          .update({ signature_urls: urls })
-          .eq('id', studentId);
-          
-        if (updateError) throw updateError;
-      }
-      
-      toast.success('Files uploaded successfully');
-      
-      // Trigger AI training in the background (fire-and-forget)
-      try {
-        console.log(`Starting AI training for student ${studentId}`);
-        const trainingResult = await aiService.trainStudent(studentId);
-        if (trainingResult.success) {
-          toast.success('AI signature training started successfully');
-        } else {
-          console.warn('AI training failed:', trainingResult.error);
-          toast.warning('Signature uploaded but AI training failed. Manual training may be needed.');
-        }
-      } catch (error) {
-        console.error('AI training error:', error);
-        // Don't show error toast as the main upload was successful
-      }
-      
-      // Refresh current page
-      fetchStudents(searchTerm, filters.program, filters.year, pagination.currentPage, pagination.pageSize);
-      
-      return { urls };
-    } catch (error) {
-      console.error('Error uploading files:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to upload files');
-      throw error;
-    } finally {
-      setUploading(null);
-    }
-  };
 
   const getInitials = (name: string) => {
     if (!name) return '';
@@ -660,7 +501,7 @@ const Students = () => {
           <div className="flex flex-col">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-1">
               <div>
-                <h1 className="text-2xl font-bold text-education-navy mb-0.5">Students</h1>
+                <h1 className="text-lg font-bold text-education-navy">STUDENTS</h1>
                 <p className="text-sm text-muted-foreground">
                   Manage and monitor student records
                 </p>
@@ -794,37 +635,36 @@ const Students = () => {
                   <th scope="col" className="px-3 py-2 text-left font-medium">Program</th>
                   <th scope="col" className="px-3 py-2 text-left font-medium">Year & Section</th>
                   <th scope="col" className="px-3 py-2 text-left font-medium">Contact</th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200 text-sm">
                 {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center">
-                      <div className="flex justify-center">
-                        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                      </div>
-                      <p className="mt-2 text-sm text-gray-500">Loading students...</p>
-                    </td>
-                  </tr>
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center">
+                    <div className="flex justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">Loading students...</p>
+                  </td>
+                </tr>
                 ) : students.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
-                      {pagination.totalCount === 0 
-                        ? 'No students found. Add your first student!'
-                        : 'No students match the current filters. Try adjusting your search or filters.'}
-                      {pagination.totalCount > 0 && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="mt-3 h-8 text-xs hover:bg-gray-100 hover:text-gray-900"
-                          onClick={clearFilters}
-                        >
-                          Clear all filters
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
+                    {pagination.totalCount === 0 
+                      ? 'No students found. Add your first student!'
+                      : 'No students match the current filters. Try adjusting your search or filters.'}
+                    {pagination.totalCount > 0 && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="mt-3 h-8 text-xs hover:bg-gray-100 hover:text-gray-900"
+                        onClick={clearFilters}
+                      >
+                        Clear all filters
+                      </Button>
+                    )}
+                  </td>
+                </tr>
                 ) : (
                   students.map((student) => (
                     <tr key={student.id} className="hover:bg-gray-50">
@@ -868,25 +708,6 @@ const Students = () => {
                             <span className="text-sm">{student.contact_no}</span>
                           </div>
                         )}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right">
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          className="h-7 w-7"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUploadClick(student);
-                          }}
-                          disabled={uploading === student.id}
-                          title="Upload signature"
-                        >
-                          {uploading === student.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Upload className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
                       </td>
                     </tr>
                   ))
@@ -990,23 +811,6 @@ const Students = () => {
                               <span className="text-gray-400 text-xs"> / 100%</span>
                             </p>
                           </div>
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="h-7 w-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleUploadClick(student);
-                            }}
-                            disabled={uploading === student.id}
-                            title="Upload signature"
-                          >
-                            {uploading === student.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Upload className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -1023,133 +827,6 @@ const Students = () => {
         )}
         </div>
       </div>
-
-      {/* Upload Signature Modal */}
-      {showUploadModal && currentStudent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
-                Upload Signatures for {currentStudent.name}
-              </h2>
-              <button 
-                onClick={resetUpload}
-                className="text-gray-500 hover:text-gray-700"
-                disabled={!!uploading}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mb-3">
-              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors p-6">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <Upload className="w-10 h-10 mb-3 text-gray-400" />
-                  <p className="text-sm text-gray-600 mb-1">
-                    <span className="font-semibold text-blue-600">Click to upload</span> or drag and drop
-                  </p>
-                  <p className="text-xs text-gray-500 mb-2">
-                    PNG, JPG, JPEG, GIF, or WEBP (Max 10MB each)
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    You can select multiple files at once
-                  </p>
-                </div>
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  multiple 
-                  accept="image/png, image/jpeg, image/gif, image/webp"
-                  onChange={handleFileChange}
-                />
-              </label>
-            </div>
-
-            {/* Selected files preview */}
-            {selectedFiles.length > 0 && (
-              <div className="border rounded-lg p-4 mb-4 flex-1 overflow-auto">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">
-                  Selected Files ({selectedFiles.length})
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {selectedFiles.map((file, index) => (
-                    <div 
-                      key={`${file.name}-${index}`}
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100"
-                    >
-                      <div className="flex items-center min-w-0">
-                        <div 
-                          className="w-10 h-10 flex-shrink-0 bg-gray-200 rounded overflow-hidden mr-3 cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (file.type.startsWith('image/')) {
-                              openPreview(file);
-                            }
-                          }}
-                        >
-                          {file.type.startsWith('image/') ? (
-                            <img 
-                              src={file.preview} 
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                              onLoad={() => {
-                                URL.revokeObjectURL(file.preview);
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                              <FileImage className="h-5 w-5 text-gray-500" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(file.size / 1024).toFixed(1)} KB
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(index)}
-                        className="text-gray-400 hover:text-red-500 ml-2"
-                        disabled={!!uploading}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
-              <Button 
-                variant="outline" 
-                onClick={resetUpload}
-                disabled={!!uploading}
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleSubmit}
-                disabled={selectedFiles.length === 0 || !!uploading}
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                    Uploading...
-                  </>
-                ) : (
-                  `Upload ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-8">
@@ -1182,50 +859,6 @@ const Students = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Image Preview Modal */}
-      {previewImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60] p-4" onClick={closePreview}>
-          <div className="relative max-w-4xl w-full max-h-[90vh]" onClick={e => e.stopPropagation()}>
-            <div className="bg-white rounded-lg overflow-hidden shadow-xl">
-              <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="text-lg font-medium text-gray-900">{previewImage.name}</h3>
-                <button 
-                  onClick={closePreview}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="p-4 flex justify-center bg-black">
-                {previewImage && (
-                  <img 
-                    src={previewImage.url} 
-                    alt="Preview" 
-                    className="max-h-[70vh] max-w-full object-contain"
-                    onLoad={(e) => {
-                      URL.revokeObjectURL(previewImage.url);
-                    }}
-                    onError={(e) => {
-                      console.error('Error loading image:', previewImage.url);
-                      e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiZxdW90O2N1cnJlbnRDb2xvciZxdW90OyIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWltYWdlIj48cmVjdCB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHg9IjMiIHk9IjMiIHJ4PSIyIiByeT0iMiIvPjxjaXJjbGUgY3g9IjguNSIgY3k9IjguNSIgcj0iMS41Ii8+PHBvbHlsaW5lIHBvaW50cz0iMjEgMTUgMTYgMTAgNSAyMSIvPjwvc3ZnPg==';
-                      e.currentTarget.className = 'h-32 w-32 text-gray-400';
-                    }}
-                  />
-                )}
-              </div>
-              <div className="p-4 border-t flex justify-end">
-                <Button 
-                  variant="outline" 
-                  onClick={closePreview}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       </PageWrapper>
     </Layout>
   );

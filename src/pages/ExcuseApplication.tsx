@@ -434,8 +434,8 @@ const ExcuseApplicationContent = () => {
     <div className="flex-1 space-y-4 px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Excuse Applications</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-lg font-bold tracking-tight">EXCUSE APPLICATIONS</h1>
+          <p className="text-sm text-muted-foreground">
             Review and manage student excuse applications for absences
           </p>
         </div>

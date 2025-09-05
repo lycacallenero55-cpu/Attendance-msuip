@@ -1188,7 +1188,7 @@ const Schedule = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-education-navy">Schedule</h1>
+            <h1 className="text-lg font-bold text-education-navy">SCHEDULE</h1>
             <p className="text-sm text-muted-foreground">Manage and view scheduled sessions</p>
           </div>
           <Button 

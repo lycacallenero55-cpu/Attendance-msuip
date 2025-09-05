@@ -289,8 +289,8 @@ const TakeAttendanceContent: React.FC = () => {
     <div className="flex-1 flex flex-col space-y-4 px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Take Attendance</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-lg font-bold text-education-navy">TAKE ATTENDANCE</h1>
+          <p className="text-sm text-muted-foreground">
             Select a session to take attendance
           </p>
         </div>

@@ -17,60 +17,190 @@ interface MobileNavigationProps {
 export const MobileNavigation = ({ userRole = 'user' }: MobileNavigationProps) => {
   const location = useLocation();
 
-  const baseNavItems = [
-    { 
-      icon: LayoutDashboard, 
-      label: "Dashboard", 
-      href: "/",
-      isActive: (path: string) => path === '/'
-    },
-    { 
-      icon: UserCheck, 
-      label: "Attendance", 
-      href: "/take-attendance",
-      isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
-    },
-    { 
-      icon: Users, 
-      label: "Students", 
-      href: "/students",
-      isActive: (path: string) => path === '/students'
-    },
-    { 
-      icon: CalendarClock, 
-      label: "Sessions", 
-      href: "/schedule",
-      isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
-    },
-    { 
-      icon: FileText, 
-      label: "Reports", 
-      href: "/reports",
-      isActive: (path: string) => path === '/reports'
-    },
-  ];
-
-  const roleBasedItems = [
-    ...(['admin', 'ROTC admin', 'Instructor'].includes(userRole) ? [{
-      icon: Book, 
-      label: "Subjects", 
-      href: "/subjects",
-      isActive: (path: string) => path === '/subjects'
-    }] : []),
-  ];
-
-  // Filter items based on role
-  const getFilteredNavItems = () => {
-    if (userRole === 'ROTC officer') {
-      // ROTC officers can only access Take Attendance
-      return baseNavItems.filter(item => item.href === '/take-attendance');
+  const getNavItems = (userRole: string = '') => {
+    if (userRole === 'admin') {
+      // Admin - naturally full access
+      return [
+        { 
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+        },
+        { 
+          icon: CalendarClock, 
+          label: "Sessions", 
+          href: "/schedule",
+          isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
+        },
+        { 
+          icon: FileText, 
+          label: "Reports", 
+          href: "/reports",
+          isActive: (path: string) => path === '/reports'
+        },
+        {
+          icon: Book, 
+          label: "Subjects", 
+          href: "/subjects",
+          isActive: (path: string) => path === '/subjects'
+        }
+      ];
+    } else if (userRole === 'ROTC admin') {
+      // ROTC Admin - same as admin but subject and allowed terms is restricted or hidden
+      return [
+        { 
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+        },
+        { 
+          icon: CalendarClock, 
+          label: "Sessions", 
+          href: "/schedule",
+          isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
+        },
+        { 
+          icon: FileText, 
+          label: "Reports", 
+          href: "/reports",
+          isActive: (path: string) => path === '/reports'
+        }
+      ];
+    } else if (userRole === 'Instructor') {
+      // Instructor
+      return [
+        { 
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+        },
+        { 
+          icon: CalendarClock, 
+          label: "Sessions", 
+          href: "/schedule",
+          isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
+        },
+        { 
+          icon: FileText, 
+          label: "Reports", 
+          href: "/reports",
+          isActive: (path: string) => path === '/reports'
+        },
+        {
+          icon: Book, 
+          label: "Subjects", 
+          href: "/subjects",
+          isActive: (path: string) => path === '/subjects'
+        }
+      ];
+    } else if (userRole === 'SSG officer') {
+      // SSG Officer - no subject
+      return [
+        { 
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+        },
+        { 
+          icon: CalendarClock, 
+          label: "Sessions", 
+          href: "/schedule",
+          isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+        },
+        { 
+          icon: Users, 
+          label: "Students", 
+          href: "/students",
+          isActive: (path: string) => path === '/students'
+        },
+        { 
+          icon: FileText, 
+          label: "Reports", 
+          href: "/reports",
+          isActive: (path: string) => path === '/reports'
+        }
+      ];
+    } else if (userRole === 'ROTC officer') {
+      // ROTC Officer - only Take Attendance, Profile, Log Out
+      return [
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+        }
+      ];
+    } else {
+      // Default user role - limited access
+      return [
+        { 
+          icon: LayoutDashboard, 
+          label: "Dashboard", 
+          href: "/",
+          isActive: (path: string) => path === '/'
+        },
+        { 
+          icon: UserCheck, 
+          label: "Attendance", 
+          href: "/take-attendance",
+          isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+        }
+      ];
     }
-    
-    return [...baseNavItems, ...roleBasedItems];
   };
 
-  const navItems = getFilteredNavItems();
-
+    const navItems = getNavItems(userRole);
+  
+  // Debug logging
+  console.log('Mobile Navigation - Current userRole:', userRole);
+  console.log('Mobile Navigation - Generated navItems:', navItems);
+  
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex justify-around items-center h-16 z-30 md:hidden">
       {navItems.map((item) => {

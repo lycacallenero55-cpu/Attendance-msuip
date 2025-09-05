@@ -38,7 +38,7 @@ const Layout = ({ children }: LayoutProps) => {
           // Collapsed thinner, expanded restored to original
           ? (isCollapsed ? 'ml-12' : 'ml-64') 
           : 'ml-0 w-full px-4', // Add padding for mobile
-        "py-3 md:py-4"
+        "pt-2 pb-3 md:pt-2 md:pb-4"
       )}>
         {isLoading ? (
           <div className="space-y-4">

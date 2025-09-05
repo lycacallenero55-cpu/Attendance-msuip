@@ -20,7 +20,8 @@ import {
   User,
   ChevronLeft,
   CalendarDays,
-  BarChartBig
+  BarChartBig,
+  Brain
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
@@ -69,32 +70,145 @@ let cachedUserRole: string | null = getCachedUserRole();
 let cachedUserId: string | null = getCachedUserId();
 
 // Navigation items configuration
-const getNavItems = (userRole: string = '') => [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { 
-    icon: UserCheck, 
-    label: "Take Attendance", 
-    href: "/take-attendance",
-    isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
-  },
-  { 
-    icon: CalendarClock, 
-    label: "Sessions", 
-    href: "/schedule",
-    isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
-  },
-  { icon: Users, label: "Students", href: "/students" },
-  { icon: BarChartBig, label: "Reports", href: "/reports" },
-  ...(['admin', 'ROTC admin', 'Instructor'].includes(userRole) ? [{ icon: Book, label: "Subjects", href: "/subjects" }] : []),
-  { 
-    icon: FileText, 
-    label: "Excuse Application", 
-    href: "/excuse-application",
-    isActive: (path: string) => path === '/excuse-application'
-  },
-  { icon: CalendarDays, label: "Allowed Terms", href: "/academic-year" },
-  ...(['admin', 'ROTC admin'].includes(userRole) ? [{ icon: UserCog, label: "Accounts", href: "/accounts" }] : []),
-];
+const getNavItems = (userRole: string = '') => {
+  if (userRole === 'admin') {
+    // Admin - naturally full access
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
+      { 
+        icon: CalendarClock, 
+        label: "Sessions", 
+        href: "/schedule",
+        isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+      },
+      { icon: Users, label: "Students", href: "/students" },
+      { icon: BarChartBig, label: "Reports", href: "/reports" },
+      { icon: Book, label: "Subjects", href: "/subjects" },
+      { 
+        icon: FileText, 
+        label: "Excuse Application", 
+        href: "/excuse-application",
+        isActive: (path: string) => path === '/excuse-application'
+      },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" },
+      { icon: CalendarDays, label: "Allowed Terms", href: "/academic-year" },
+      { icon: UserCog, label: "Accounts", href: "/accounts" }
+    ];
+  } else if (userRole === 'ROTC admin') {
+    // ROTC Admin - same as admin but subject and allowed terms is restricted or hidden
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
+      { 
+        icon: CalendarClock, 
+        label: "Sessions", 
+        href: "/schedule",
+        isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+      },
+      { icon: Users, label: "Students", href: "/students" },
+      { icon: BarChartBig, label: "Reports", href: "/reports" },
+      { 
+        icon: FileText, 
+        label: "Excuse Application", 
+        href: "/excuse-application",
+        isActive: (path: string) => path === '/excuse-application'
+      },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" },
+      { icon: UserCog, label: "Accounts", href: "/accounts" }
+    ];
+  } else if (userRole === 'Instructor') {
+    // Instructor
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
+      { 
+        icon: CalendarClock, 
+        label: "Sessions", 
+        href: "/schedule",
+        isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+      },
+      { icon: Users, label: "Students", href: "/students" },
+      { icon: BarChartBig, label: "Reports", href: "/reports" },
+      { icon: Book, label: "Subjects", href: "/subjects" },
+      { 
+        icon: FileText, 
+        label: "Excuse Application", 
+        href: "/excuse-application",
+        isActive: (path: string) => path === '/excuse-application'
+      },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" }
+    ];
+  } else if (userRole === 'SSG officer') {
+    // SSG Officer - no subject
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
+      { 
+        icon: CalendarClock, 
+        label: "Sessions", 
+        href: "/schedule",
+        isActive: (path: string) => path === '/schedule' || path.startsWith('/sessions/') 
+      },
+      { icon: Users, label: "Students", href: "/students" },
+      { icon: BarChartBig, label: "Reports", href: "/reports" },
+      { 
+        icon: FileText, 
+        label: "Excuse Application", 
+        href: "/excuse-application",
+        isActive: (path: string) => path === '/excuse-application'
+      },
+      { icon: Brain, label: "Signature AI", href: "/signature-ai" }
+    ];
+  } else if (userRole === 'ROTC officer') {
+    // ROTC Officer - only Take Attendance, Profile, Log Out
+    return [
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      }
+    ];
+  } else {
+    // Default user role - limited access
+    return [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+      { 
+        icon: UserCheck, 
+        label: "Take Attendance", 
+        href: "/take-attendance",
+        isActive: (path: string) => path === '/take-attendance' || path.startsWith('/take-attendance/')
+      },
+      { 
+        icon: FileText, 
+        label: "Excuse Application", 
+        href: "/excuse-application",
+        isActive: (path: string) => path === '/excuse-application'
+      }
+    ];
+  }
+};
 
 // Desktop Sidebar Navigation
 const DesktopNavigation = () => {
@@ -109,8 +223,12 @@ const DesktopNavigation = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isCollapsing, setIsCollapsing] = useState(false);
   const isInitialMount = useRef(true);
-  const navItems = getNavItems(userRole);
-
+    const navItems = getNavItems(userRole);
+  
+  // Debug logging
+  console.log('Desktop Navigation - Current userRole:', userRole);
+  console.log('Desktop Navigation - Generated navItems:', navItems);
+  
   useEffect(() => {
     const fetchRole = async () => {
       // If we have cached role for the same user, don't refetch
@@ -157,37 +275,14 @@ const DesktopNavigation = () => {
 
   const getPanelLabel = () => {
     if (userRole === 'admin') return 'Admin Panel';
+    if (userRole === 'ROTC admin') return 'ROTC Admin Panel';
     if (userRole === 'Instructor') return 'Instructor Panel';
     if (userRole === 'SSG officer') return 'SSG Officer Panel';
-    if (userRole === 'ROTC admin') return 'ROTC admin Panel';
-    if (userRole === 'ROTC officer') return 'ROTC officer Panel';
+    if (userRole === 'ROTC officer') return 'ROTC Officer Panel';
     return 'User Panel';
   };
 
-  const shouldShowItem = (item: typeof navItems[0]) => {
-    // Role-based access control
-    if (userRole === 'ROTC officer') {
-      // ROTC officers can only access Take Attendance
-      return item.href === '/take-attendance';
-    }
-    
-    // Admin and ROTC admin have full access
-    if (userRole === 'admin' || userRole === 'ROTC admin') {
-      return true;
-    }
-    
-    // Show admin-only items only for admin and ROTC admin users
-    if (item.href === '/students' || item.href === '/academic-year' || item.href === '/accounts') {
-      return ['admin', 'ROTC admin'].includes(userRole);
-    }
-    
-    // SSG officers cannot see Subjects
-    if (item.href === '/subjects' && userRole === 'SSG officer') {
-      return false;
-    }
-    
-    return true; // Show all other items
-  };
+
 
   const handleLogout = async () => {
     try {
@@ -299,7 +394,7 @@ const DesktopNavigation = () => {
             </div>
           )}
           
-          {navItems.filter(shouldShowItem).map((item, index) => {
+          {navItems.map((item, index) => {
             
             const isActive = item.isActive 
               ? item.isActive(location.pathname) 
@@ -579,8 +674,12 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const isInitialMount = useRef(true);
-  const navItems = getNavItems(userRole);
-
+    const navItems = getNavItems(userRole);
+  
+  // Debug logging
+  console.log('MobileDrawer - Current userRole:', userRole);
+  console.log('MobileDrawer - Generated navItems:', navItems);
+  
   // Handle animation states
   useEffect(() => {
     if (isOpen) {
@@ -639,14 +738,12 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }, [user?.id]); // Only depend on user ID, not the full user object
 
   const getPanelLabel = () => {
-    switch (userRole) {
-      case 'admin':
-        return 'Admin Panel';
-      case 'instructor':
-        return 'Instructor Panel';
-      default:
-        return 'User Panel';
-    }
+    if (userRole === 'admin') return 'Admin Panel';
+    if (userRole === 'ROTC admin') return 'ROTC Admin Panel';
+    if (userRole === 'Instructor') return 'Instructor Panel';
+    if (userRole === 'SSG officer') return 'SSG Officer Panel';
+    if (userRole === 'ROTC officer') return 'ROTC Officer Panel';
+    return 'User Panel';
   };
 
   const handleLogout = async () => {
@@ -713,7 +810,7 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
               MENU
             </span>
           </div>
-          {navItems.filter(shouldShowItem).map((item) => {
+          {navItems.map((item) => {
             const isActive = item.isActive 
               ? item.isActive(location.pathname) 
               : location.pathname === item.href;

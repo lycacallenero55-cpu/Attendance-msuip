@@ -244,8 +244,8 @@ const Profile = () => {
       <div className="px-6 py-4 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-lg font-bold tracking-tight">PROFILE</h1>
+          <p className="text-sm text-muted-foreground">
             Manage your account information and preferences
           </p>
         </div>
@@ -254,7 +254,6 @@ const Profile = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
               Profile Information
             </CardTitle>
             <CardDescription>

@@ -406,7 +406,7 @@ export default function SessionStudents() {
       <div className="px-6 py-4 space-y-4">
         {/* Page Header - Session Title */}
         <div className="space-y-0.5">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-lg font-bold tracking-tight text-foreground">
             {session.title}
           </h1>
           <p className="text-sm text-muted-foreground">

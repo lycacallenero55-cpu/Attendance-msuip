@@ -107,7 +107,7 @@ const Reports = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
           <div>
-            <h1 className="text-2xl font-bold text-education-navy">Attendance Reports</h1>
+            <h1 className="text-lg font-bold text-education-navy">ATTENDANCE REPORTS</h1>
             <p className="text-sm text-muted-foreground">
               View and manage all attendance sessions and reports
             </p>

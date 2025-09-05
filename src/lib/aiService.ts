@@ -1,6 +1,6 @@
 // AI Service Configuration and Client
 
-const AI_BASE_URL = import.meta.env.VITE_AI_BASE_URL || 'http://localhost:8081';
+const AI_BASE_URL = import.meta.env.VITE_AI_BASE_URL || 'http://localhost:8000';
 
 export interface AITrainingResponse {
   success: boolean;
@@ -28,6 +28,41 @@ export interface AIVerificationResponse {
     surname: string;
   };
   score: number;
+}
+
+export interface AsyncTrainingResponse {
+  success: boolean;
+  job_id: string;
+  message: string;
+  stream_url: string;
+}
+
+export interface TrainingJob {
+  job_id: string;
+  student_id: number;
+  job_type: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progress: number;
+  current_stage: string;
+  estimated_time_remaining: number | null;
+  start_time: string | null;
+  end_time: string | null;
+  result: any;
+  error: string | null;
+  created_at: string;
+}
+
+export interface AIVerificationResponse {
+  success: boolean;
+  match: boolean;
+  predicted_student_id: number | null;
+  predicted_student?: {
+    id: number;
+    student_id: string;
+    firstname: string;
+    surname: string;
+  };
+  score: number;
   decision: 'match' | 'no_match' | 'error';
   message: string;
   error?: string;
@@ -41,15 +76,33 @@ export class AIService {
   }
 
   /**
+   * Get trained models (optionally by student_id)
+   */
+  async getTrainedModels(studentId?: number): Promise<any[]> {
+    try {
+      const url = studentId
+        ? `${this.baseUrl}/api/training/models?student_id=${studentId}`
+        : `${this.baseUrl}/api/training/models`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Failed to fetch models');
+      }
+      return data.models || [];
+    } catch (error) {
+      console.error('AI getTrainedModels error:', error);
+      return [];
+    }
+  }
+
+  /**
    * Train AI model for a specific student
    */
   async trainStudent(studentId: number): Promise<AITrainingResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/train/${studentId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      // Keep method for backward compatibility; recommend using trainStudentWithFiles
+      const response = await fetch(`${this.baseUrl}/api/training/start`, {
+        method: 'POST'
       });
 
       const data = await response.json();
@@ -70,6 +123,41 @@ export class AIService {
   }
 
   /**
+   * Train with actual files against FastAPI endpoint
+   */
+  async trainStudentWithFiles(
+    studentSchoolId: string,
+    genuineFiles: File[],
+    forgedFiles: File[]
+  ): Promise<any> {
+    try {
+      const formData = new FormData();
+      formData.append('student_id', String(studentSchoolId));
+      for (const f of genuineFiles) formData.append('genuine_files', f);
+      for (const f of forgedFiles) formData.append('forged_files', f);
+
+      const response = await fetch(`${this.baseUrl}/api/training/start`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Training request failed');
+      }
+      // Normalize to include success flag for UI consistency
+      return { success: true, ...data };
+    } catch (error) {
+      console.error('AI training (files) error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
    * Verify signature image
    */
   async verifySignature(
@@ -84,7 +172,7 @@ export class AIService {
         formData.append('session_id', sessionId.toString());
       }
 
-      const response = await fetch(`${this.baseUrl}/verify`, {
+      const response = await fetch(`${this.baseUrl}/api/verification/verify`, {
         method: 'POST',
         body: formData,
       });
@@ -106,6 +194,43 @@ export class AIService {
         decision: 'error',
         message: 'Failed to verify signature',
         error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Verify using model and references (FastAPI shape)
+   */
+  async verifyWithModel(
+    modelId: string,
+    referenceFiles: File[],
+    testFile: File
+  ): Promise<AIVerificationResponse> {
+    try {
+      const formData = new FormData();
+      formData.append('model_id', modelId);
+      for (const f of referenceFiles) formData.append('reference_files', f);
+      formData.append('test_file', testFile);
+
+      const response = await fetch(`${this.baseUrl}/api/verification/verify`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Verification failed');
+      }
+      return data;
+    } catch (error) {
+      console.error('AI verification (model) error:', error);
+      return {
+        success: false,
+        match: false,
+        predicted_student_id: null,
+        score: 0,
+        decision: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -138,6 +263,89 @@ export class AIService {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
+  }
+
+  /**
+   * Start async training job
+   */
+  async startAsyncTraining(
+    studentId: string,
+    genuineFiles: File[],
+    forgedFiles: File[]
+  ): Promise<AsyncTrainingResponse> {
+    try {
+      const formData = new FormData();
+      formData.append('student_id', studentId);
+      for (const file of genuineFiles) {
+        formData.append('genuine_files', file);
+      }
+      for (const file of forgedFiles) {
+        formData.append('forged_files', file);
+      }
+
+      const response = await fetch(`${this.baseUrl}/api/training/start-async`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Failed to start training');
+      }
+      return data;
+    } catch (error) {
+      console.error('AI async training error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get training job status
+   */
+  async getJobStatus(jobId: string): Promise<TrainingJob> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/progress/job/${jobId}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'Failed to get job status');
+      }
+      return data;
+    } catch (error) {
+      console.error('Get job status error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Subscribe to training job progress via Server-Sent Events
+   */
+  subscribeToJobProgress(
+    jobId: string,
+    onUpdate: (job: TrainingJob) => void,
+    onError?: (error: Error) => void
+  ): EventSource {
+    const eventSource = new EventSource(`${this.baseUrl}/api/progress/stream/${jobId}`);
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const job: TrainingJob = JSON.parse(event.data);
+        onUpdate(job);
+      } catch (error) {
+        console.error('Error parsing SSE data:', error);
+        if (onError) {
+          onError(error instanceof Error ? error : new Error('Parse error'));
+        }
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      if (onError) {
+        onError(new Error('Connection error'));
+      }
+    };
+    
+    return eventSource;
   }
 
   /**

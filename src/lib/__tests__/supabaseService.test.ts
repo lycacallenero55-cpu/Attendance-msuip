@@ -10,7 +10,6 @@ import {
   deleteStudent,
   fetchSessionStudents,
   markAttendance,
-  uploadSignature,
   getCurrentUser,
   updateUserProfile,
 } from '../supabaseService';
@@ -98,7 +97,7 @@ describe('supabaseService', () => {
         error: null,
       });
 
-      const result = await createSession({ ...newSession, capacity: parseInt(newSession.capacity) || 0 });
+      const result = await createSession(newSession);
       
       expect(mockSupabase.from('sessions').insert).toHaveBeenCalledWith([newSession]);
       expect(result).toEqual(mockResponse);
@@ -170,36 +169,6 @@ describe('supabaseService', () => {
     });
   });
 
-  describe('uploadSignature', () => {
-    it('should upload a signature and update student record', async () => {
-      const studentId = 1;
-      const file = new File(['signature'], 'signature.png', { type: 'image/png' });
-      
-      // Mock file upload
-      (mockSupabase.storage.from('signatures').upload as jest.Mock).mockResolvedValueOnce({
-        error: null,
-      });
-
-      // Mock student update
-      (mockSupabase.from('students').update as jest.Mock).mockResolvedValueOnce({
-        data: { id: studentId, signature_url: 'https://example.com/signature.jpg' },
-        error: null,
-      });
-
-      const result = await uploadSignature(studentId, file);
-      
-      // Check file was uploaded with correct parameters
-      expect(mockSupabase.storage.from).toHaveBeenCalledWith('signatures');
-      expect(mockSupabase.storage.from('signatures').upload).toHaveBeenCalledWith(
-        expect.stringMatching(/^signatures/),
-        file,
-        { cacheControl: '3600', upsert: true }
-      );
-      
-      expect(result).toEqual({ url: 'https://example.com/signature.jpg' });
-    });
-  });
-
   describe('getCurrentUser', () => {
     it('should return the current user', async () => {
       const mockUser = {
@@ -219,7 +188,7 @@ describe('supabaseService', () => {
         data: { user: mockUser },
       });
 
-      (mockSupabase.from('admin').select as jest.Mock).mockResolvedValueOnce({
+      (mockSupabase.from('profiles').select as jest.Mock).mockResolvedValueOnce({
         data: mockProfile,
         error: null,
       });

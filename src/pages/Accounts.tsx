@@ -232,8 +232,8 @@ const Accounts = () => {
         <div className="px-6 py-4 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Account Management</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-lg font-bold tracking-tight">ACCOUNT MANAGEMENT</h1>
+            <p className="text-sm text-muted-foreground">
               Manage user accounts and access permissions
             </p>
           </div>

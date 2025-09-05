@@ -14,36 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
-      academic_years: {
+      admin: {
         Row: {
-          created_at: string
-          description: string | null
-          end_date: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          email: string
+          first_name: string
           id: string
-          is_active: boolean
-          name: string
-          start_date: string
-          updated_at: string
+          last_name: string
+          rejected_at: string | null
+          rejected_by: string | null
+          status: string | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
-          description?: string | null
-          end_date: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          email: string
+          first_name: string
           id?: string
-          is_active?: boolean
-          name: string
-          start_date: string
-          updated_at?: string
+          last_name: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          email?: string
+          first_name?: string
+          id?: string
+          last_name?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      allowed_terms: {
+        Row: {
+          academic_year: string
+          created_at: string
+          end_date: string
+          id: string
+          semester: string
+          start_date: string
+        }
+        Insert: {
+          academic_year: string
           created_at?: string
-          description?: string | null
+          end_date: string
+          id?: string
+          semester: string
+          start_date: string
+        }
+        Update: {
+          academic_year?: string
+          created_at?: string
           end_date?: string
           id?: string
-          is_active?: boolean
-          name?: string
+          semester?: string
           start_date?: string
-          updated_at?: string
         }
         Relationships: []
       }
@@ -85,13 +121,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sessions"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "attendance_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "student_signatures_view"
-            referencedColumns: ["student_id"]
           },
           {
             foreignKeyName: "attendance_student_id_fkey"
@@ -154,109 +183,7 @@ export type Database = {
             foreignKeyName: "excuse_applications_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
-            referencedRelation: "student_signatures_view"
-            referencedColumns: ["student_id"]
-          },
-          {
-            foreignKeyName: "excuse_applications_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
             referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      profiles: {
-        Row: {
-          approved_at: string | null
-          approved_by: string | null
-          created_at: string | null
-          department: string | null
-          email: string
-          first_name: string | null
-          id: string
-          last_name: string | null
-          position: string | null
-          rejected_at: string | null
-          rejected_by: string | null
-          role: string
-          status: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          approved_at?: string | null
-          approved_by?: string | null
-          created_at?: string | null
-          department?: string | null
-          email: string
-          first_name?: string | null
-          id: string
-          last_name?: string | null
-          position?: string | null
-          rejected_at?: string | null
-          rejected_by?: string | null
-          role?: string
-          status?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          approved_at?: string | null
-          approved_by?: string | null
-          created_at?: string | null
-          department?: string | null
-          email?: string
-          first_name?: string | null
-          id?: string
-          last_name?: string | null
-          position?: string | null
-          rejected_at?: string | null
-          rejected_by?: string | null
-          role?: string
-          status?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      semesters: {
-        Row: {
-          academic_year_id: string
-          created_at: string
-          description: string | null
-          end_date: string
-          id: string
-          is_active: boolean
-          name: string
-          start_date: string
-          updated_at: string
-        }
-        Insert: {
-          academic_year_id: string
-          created_at?: string
-          description?: string | null
-          end_date: string
-          id?: string
-          is_active?: boolean
-          name: string
-          start_date: string
-          updated_at?: string
-        }
-        Update: {
-          academic_year_id?: string
-          created_at?: string
-          description?: string | null
-          end_date?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-          start_date?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "semesters_academic_year_id_fkey"
-            columns: ["academic_year_id"]
-            isOneToOne: false
-            referencedRelation: "academic_years"
             referencedColumns: ["id"]
           },
         ]
@@ -310,78 +237,7 @@ export type Database = {
           updated_at?: string | null
           year?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "sessions_created_by_user_id_fkey"
-            columns: ["created_by_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      signatures: {
-        Row: {
-          created_at: string
-          device_info: Json | null
-          features: Json | null
-          file_name: string
-          file_size: number
-          file_type: string
-          height: number | null
-          id: number
-          quality_score: number | null
-          storage_path: string
-          student_id: number
-          updated_at: string
-          width: number | null
-        }
-        Insert: {
-          created_at?: string
-          device_info?: Json | null
-          features?: Json | null
-          file_name: string
-          file_size: number
-          file_type: string
-          height?: number | null
-          id?: number
-          quality_score?: number | null
-          storage_path: string
-          student_id: number
-          updated_at?: string
-          width?: number | null
-        }
-        Update: {
-          created_at?: string
-          device_info?: Json | null
-          features?: Json | null
-          file_name?: string
-          file_size?: number
-          file_type?: string
-          height?: number | null
-          id?: number
-          quality_score?: number | null
-          storage_path?: string
-          student_id?: number
-          updated_at?: string
-          width?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "signatures_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "student_signatures_view"
-            referencedColumns: ["student_id"]
-          },
-          {
-            foreignKeyName: "signatures_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       students: {
         Row: {
@@ -394,12 +250,9 @@ export type Database = {
           id: number
           middle_initial: string | null
           middlename: string | null
-          primary_signature_id: number | null
           program: string
           section: string
           sex: string | null
-          signature_url: string | null
-          signature_urls: string[] | null
           student_id: string
           surname: string
           updated_at: string | null
@@ -415,12 +268,9 @@ export type Database = {
           id?: number
           middle_initial?: string | null
           middlename?: string | null
-          primary_signature_id?: number | null
           program: string
           section: string
           sex?: string | null
-          signature_url?: string | null
-          signature_urls?: string[] | null
           student_id: string
           surname: string
           updated_at?: string | null
@@ -436,51 +286,123 @@ export type Database = {
           id?: number
           middle_initial?: string | null
           middlename?: string | null
-          primary_signature_id?: number | null
           program?: string
           section?: string
           sex?: string | null
-          signature_url?: string | null
-          signature_urls?: string[] | null
           student_id?: string
           surname?: string
           updated_at?: string | null
           year?: string
         }
+        Relationships: []
+      }
+      trained_models: {
+        Row: {
+          accuracy: number | null
+          created_at: string | null
+          embedding_model_path: string | null
+          forged_count: number
+          genuine_count: number
+          id: number
+          model_path: string
+          prototype_centroid: Json | null
+          prototype_threshold: number | null
+          sample_count: number
+          status: string
+          student_id: number
+          training_date: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          accuracy?: number | null
+          created_at?: string | null
+          embedding_model_path?: string | null
+          forged_count?: number
+          genuine_count?: number
+          id?: number
+          model_path: string
+          prototype_centroid?: Json | null
+          prototype_threshold?: number | null
+          sample_count?: number
+          status?: string
+          student_id: number
+          training_date?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          accuracy?: number | null
+          created_at?: string | null
+          embedding_model_path?: string | null
+          forged_count?: number
+          genuine_count?: number
+          id?: number
+          model_path?: string
+          prototype_centroid?: Json | null
+          prototype_threshold?: number | null
+          sample_count?: number
+          status?: string
+          student_id?: number
+          training_date?: string | null
+          updated_at?: string | null
+        }
         Relationships: [
           {
-            foreignKeyName: "students_primary_signature_id_fkey"
-            columns: ["primary_signature_id"]
+            foreignKeyName: "trained_models_student_id_fkey"
+            columns: ["student_id"]
             isOneToOne: false
-            referencedRelation: "signatures"
+            referencedRelation: "students"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "students_primary_signature_id_fkey"
-            columns: ["primary_signature_id"]
-            isOneToOne: false
-            referencedRelation: "student_signatures_view"
-            referencedColumns: ["signature_id"]
           },
         ]
       }
-    }
-    Views: {
-      student_signatures_view: {
+      users: {
         Row: {
-          firstname: string | null
-          is_primary: boolean | null
-          last_updated: string | null
-          quality_score: number | null
-          signature_date: string | null
-          signature_id: number | null
-          storage_path: string | null
-          student_id: number | null
-          student_number: string | null
-          surname: string | null
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          email: string
+          first_name: string
+          id: string
+          last_name: string
+          rejected_at: string | null
+          rejected_by: string | null
+          role: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          email: string
+          first_name: string
+          id?: string
+          last_name: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          role: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          email?: string
+          first_name?: string
+          id?: string
+          last_name?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          role?: string
+          status?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
+    }
+    Views: {
+      [_ in never]: never
     }
     Functions: {
       approve_user: {
@@ -491,13 +413,13 @@ export type Database = {
         Args: { "": string } | { "": unknown }
         Returns: unknown
       }
-      compare_signatures: {
-        Args: { sig1_id: number; sig2_id: number }
-        Returns: number
+      check_account_exists: {
+        Args: { user_id: string }
+        Returns: boolean
       }
-      get_primary_signature: {
-        Args: { student_id_param: number }
-        Returns: string
+      check_user_exists: {
+        Args: { user_id: string }
+        Returns: boolean
       }
       get_role_label: {
         Args: { role_name: string }

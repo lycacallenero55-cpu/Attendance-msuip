@@ -18,6 +18,7 @@ import ExcuseApplication from "./pages/ExcuseApplication";
 import AllowedTerms from "./pages/AllowedTerms";
 import Subjects from "./pages/Subjects";
 import Profile from "./pages/Profile";
+import SignatureAI from "./pages/SignatureAI";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SidebarProvider } from "./contexts/SidebarContext";
 import { useAuth } from "./hooks/useAuth";
@@ -67,7 +68,9 @@ const AppRoutes = () => {
       path="/reports"
       element={
         <ProtectedRoute>
-          <Reports />
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer']}>
+            <Reports />
+          </RoleProtectedRoute>
         </ProtectedRoute>
       }
     />
@@ -75,7 +78,7 @@ const AppRoutes = () => {
       path="/students"
       element={
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin']}>
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer']}>
             <Students />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -85,7 +88,9 @@ const AppRoutes = () => {
       path="/schedule"
       element={
         <ProtectedRoute>
-          <Sessions />
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer', 'ROTC officer']}>
+            <Sessions />
+          </RoleProtectedRoute>
         </ProtectedRoute>
       }
     />
@@ -120,7 +125,7 @@ const AppRoutes = () => {
       path="/accounts"
       element={
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin']}>
+          <RoleProtectedRoute allowedRoles={['admin']}>
             <Accounts />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -138,7 +143,7 @@ const AppRoutes = () => {
       path="/academic-year"
       element={
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin']}>
+          <RoleProtectedRoute allowedRoles={['admin']}>
             <AllowedTerms />
           </RoleProtectedRoute>
         </ProtectedRoute>
@@ -148,8 +153,18 @@ const AppRoutes = () => {
       path="/subjects"
       element={
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor']}>
+          <RoleProtectedRoute allowedRoles={['admin', 'Instructor']}>
             <Subjects />
+          </RoleProtectedRoute>
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/signature-ai"
+      element={
+        <ProtectedRoute>
+          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer']}>
+            <SignatureAI />
           </RoleProtectedRoute>
         </ProtectedRoute>
       }
