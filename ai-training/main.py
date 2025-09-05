@@ -7,6 +7,7 @@ from api.training import router as training_router
 from api.verification import router as verification_router
 from api.progress import router as progress_router
 from api.versioning import router as versioning_router
+from api.utils import router as utils_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,6 +40,7 @@ app.include_router(training_router, prefix="/api/training", tags=["training"])
 app.include_router(verification_router, prefix="/api/verification", tags=["verification"])
 app.include_router(progress_router, prefix="/api/progress", tags=["progress"])
 app.include_router(versioning_router, prefix="/api/versioning", tags=["versioning"])
+app.include_router(utils_router, prefix="/api/utils", tags=["utils"])
 
 @app.get("/")
 async def root():

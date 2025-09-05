@@ -1,15 +1,19 @@
+# signature_model.py - FIXED VERSION
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 from config import settings
 import logging
+from typing import List, Tuple, Optional, Union
 from PIL import Image
-
+import os
 
 logger = logging.getLogger(__name__)
 
 class SignatureVerificationModel:
+    """Enhanced Siamese Neural Network for Signature Verification with Prototype Learning"""
+    
     def __init__(self):
         self.model = None
         self.embedding_model = None
@@ -17,50 +21,60 @@ class SignatureVerificationModel:
         self.batch_size = settings.MODEL_BATCH_SIZE
         self.epochs = settings.MODEL_EPOCHS
         self.learning_rate = settings.MODEL_LEARNING_RATE
-    
+        
+        # Enhanced training parameters
+        self.use_mixed_precision = False  # Disabled for CPU
+        self.use_gradient_accumulation = True
+        self.gradient_accumulation_steps = 4
+        
     def create_siamese_network(self):
-        """Create a Siamese neural network for signature verification"""
+        """Create an improved Siamese neural network for signature verification"""
         
         # Input layers
         input_a = layers.Input(shape=(self.image_size, self.image_size, 3), name='input_a')
         input_b = layers.Input(shape=(self.image_size, self.image_size, 3), name='input_b')
         
-        # Shared CNN backbone - optimized for CPU
+        # Enhanced embedding branch with attention mechanism
         def create_embedding_branch():
-            model = keras.Sequential([
-                # First block - reduced filters for CPU efficiency
-                layers.Conv2D(24, (5, 5), activation='relu', padding='same',
-                            input_shape=(self.image_size, self.image_size, 3)),
-                layers.BatchNormalization(),
-                layers.MaxPooling2D((2, 2)),
-                layers.Dropout(0.25),
-                
-                # Second block
-                layers.Conv2D(48, (3, 3), activation='relu', padding='same'),
-                layers.BatchNormalization(),
-                layers.MaxPooling2D((2, 2)),
-                layers.Dropout(0.25),
-                
-                # Third block
-                layers.Conv2D(96, (3, 3), activation='relu', padding='same'),
-                layers.BatchNormalization(),
-                layers.MaxPooling2D((2, 2)),
-                layers.Dropout(0.3),
-                
-                # Fourth block - signature-specific features
-                layers.Conv2D(192, (3, 3), activation='relu', padding='same'),
-                layers.BatchNormalization(),
-                layers.GlobalAveragePooling2D(),
-                
-                # Dense layers for feature extraction
-                layers.Dense(256, activation='relu'),
-                layers.BatchNormalization(),
-                layers.Dropout(0.4),
-                layers.Dense(128, activation='relu'),
-                layers.BatchNormalization(),
-                layers.Dropout(0.3),
-                layers.Dense(64, activation=None)  # No activation for embeddings
-            ], name='embedding_branch')
+            base = keras.applications.MobileNetV2(
+                input_shape=(self.image_size, self.image_size, 3),
+                include_top=False,
+                weights='imagenet')
+            
+            # Fine-tune more layers for signature-specific features
+            for layer in base.layers[:-40]:  # Unfreeze last 40 layers
+                layer.trainable = False
+            
+            x = layers.Input(shape=(self.image_size, self.image_size, 3))
+            y = keras.applications.mobilenet_v2.preprocess_input(x)
+            y = base(y, training=False)
+            
+            # Add spatial attention mechanism
+            attention = layers.Conv2D(1, (1, 1), activation='sigmoid')(y)
+            y = layers.Multiply()([y, attention])
+            
+            y = layers.GlobalAveragePooling2D()(y)
+            
+            # Deeper feature extraction with residual connections
+            y1 = layers.Dense(512, activation='relu')(y)
+            y1 = layers.BatchNormalization()(y1)
+            y1 = layers.Dropout(0.4)(y1)
+            
+            y2 = layers.Dense(256, activation='relu')(y1)
+            y2 = layers.BatchNormalization()(y2)
+            y2 = layers.Dropout(0.3)(y2)
+            
+            # Residual connection
+            y1_proj = layers.Dense(256, activation='linear')(y1)
+            y2 = layers.Add()([y2, y1_proj])
+            
+            y3 = layers.Dense(128, activation='relu')(y2)
+            y3 = layers.BatchNormalization()(y3)
+            
+            # L2 normalize embeddings for better metric learning
+            y3 = layers.Lambda(lambda x: tf.nn.l2_normalize(x, axis=1))(y3)
+            
+            model = keras.Model(inputs=x, outputs=y3, name='embedding_branch')
             return model
         
         # Create shared embedding network
@@ -70,39 +84,45 @@ class SignatureVerificationModel:
         embedding_a = embedding_network(input_a)
         embedding_b = embedding_network(input_b)
         
-        # Compute L2 distance between embeddings (no Lambda layer)
-        # Using Subtract + custom layer for compatibility
-        diff = layers.Subtract(name='embedding_diff')([embedding_a, embedding_b])
+        # Multiple distance metrics for robustness
+        l2_distance = layers.Lambda(
+            lambda x: tf.sqrt(tf.reduce_sum(tf.square(x[0] - x[1]), axis=1, keepdims=True)),
+            name='l2_distance'
+        )([embedding_a, embedding_b])
         
-        # Custom layer to compute absolute difference without Lambda
-        class AbsDiffLayer(layers.Layer):
-            def call(self, inputs):
-                return tf.abs(inputs)
+        cosine_distance = layers.Lambda(
+            lambda x: 1 - tf.reduce_sum(x[0] * x[1], axis=1, keepdims=True),
+            name='cosine_distance'
+        )([embedding_a, embedding_b])
         
-        abs_diff = AbsDiffLayer(name='abs_diff')(diff)
+        # Combine distance features
+        merged = layers.Concatenate()([
+            l2_distance,
+            cosine_distance,
+            layers.Lambda(lambda x: tf.abs(x[0] - x[1]))([embedding_a, embedding_b])
+        ])
         
-        # Classification head with residual connections
-        x = layers.Dense(32, activation='relu')(abs_diff)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dropout(0.3)(x)
-        
-        # Add skip connection for better gradient flow
-        x2 = layers.Dense(16, activation='relu')(x)
-        x2 = layers.BatchNormalization()(x2)
-        
-        # Output layer
-        output = layers.Dense(1, activation='sigmoid', name='similarity_score')(x2)
+        # Enhanced classification head
+        output = layers.Dense(128, activation='relu')(merged)
+        output = layers.BatchNormalization()(output)
+        output = layers.Dropout(0.4)(output)
+        output = layers.Dense(64, activation='relu')(output)
+        output = layers.BatchNormalization()(output)
+        output = layers.Dropout(0.3)(output)
+        output = layers.Dense(1, activation='sigmoid', name='similarity_score')(output)
         
         # Create the model
         model = keras.Model(inputs=[input_a, input_b], outputs=output, name='signature_verification')
         
-        # Use AdamW optimizer for better generalization
-        optimizer = keras.optimizers.AdamW(
-            learning_rate=self.learning_rate,
-            weight_decay=0.0001
-        )
+        # Use AdamW optimizer with cosine decay schedule
+        initial_learning_rate = self.learning_rate
+        decay_steps = 1000
+        lr_schedule = keras.optimizers.schedules.CosineDecay(
+            initial_learning_rate, decay_steps, alpha=0.1)
         
-        # Compile with additional metrics
+        optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+        
+        # Custom metrics including AUC-ROC and AUC-PR
         model.compile(
             optimizer=optimizer,
             loss='binary_crossentropy',
@@ -110,249 +130,79 @@ class SignatureVerificationModel:
                 'accuracy',
                 keras.metrics.Precision(name='precision'),
                 keras.metrics.Recall(name='recall'),
-                keras.metrics.AUC(name='auc')
+                keras.metrics.AUC(name='auc', curve='ROC'),
+                keras.metrics.AUC(name='auc_pr', curve='PR')
             ]
         )
         
-        # Create standalone embedding model for inference
-        single_input = layers.Input(shape=(self.image_size, self.image_size, 3), name='single_input')
-        single_embedding = embedding_network(single_input)
-        self.embedding_model = keras.Model(inputs=single_input, outputs=single_embedding, name='embedding_model')
-
+        # Store embedding model separately
+        self.embedding_model = embedding_network
+        
         return model
     
-    def prepare_augmented_data(self, all_images, all_labels):
-        """Prepare balanced training data from augmented images"""
-        # FIX: Ensure all images are properly converted to numpy arrays with consistent shape
-        processed_images = []
-        for img in all_images:
-            if isinstance(img, Image.Image):
-                # Convert PIL to numpy and ensure correct shape
-                img_array = np.array(img)
-                if img_array.ndim == 2:  # Grayscale
-                    img_array = np.stack([img_array] * 3, axis=-1)
-                elif img_array.shape[-1] == 4:  # RGBA
-                    img_array = img_array[:, :, :3]
-            
-                # Ensure image is the correct size
-                if img_array.shape[:2] != (self.image_size, self.image_size):
-                    # Resize using PIL for consistency
-                    pil_img = Image.fromarray(img_array.astype(np.uint8))
-                    pil_img = pil_img.resize((self.image_size, self.image_size), Image.Resampling.LANCZOS)
-                    img_array = np.array(pil_img)
-            
-                # Normalize to [0, 1]
-                img_array = img_array.astype(np.float32) / 255.0
-                processed_images.append(img_array)
-            else:
-                # Already numpy array
-                img_array = np.array(img)
-                if img_array.ndim == 2:
-                    img_array = np.stack([img_array] * 3, axis=-1)
-                elif img_array.shape[-1] == 4:
-                    img_array = img_array[:, :, :3]
-            
-                # Ensure correct shape
-                if img_array.shape[:2] != (self.image_size, self.image_size):
-                    # Use cv2 for resizing numpy arrays
-                    import cv2
-                    img_array = cv2.resize(img_array, (self.image_size, self.image_size))
-                    if img_array.ndim == 2:  # cv2 might return grayscale
-                        img_array = np.stack([img_array] * 3, axis=-1)
-            
-                # Normalize if needed
-                if img_array.max() > 1.0:
-                    img_array = img_array.astype(np.float32) / 255.0
-                processed_images.append(img_array)
-    
-        # Now create the numpy array with consistent shapes
-        images = np.array(processed_images, dtype=np.float32)
-        labels = np.array(all_labels)
-    
-        logger.info(f"Processed images shape: {images.shape}, Labels shape: {labels.shape}")
-    
-        pairs = []
-        pair_labels = []
-    
-        # Get indices
-        genuine_indices = np.where(labels == True)[0]
-        forged_indices = np.where(labels == False)[0]
-    
-        # Balance the dataset
-        num_genuine = len(genuine_indices)
-        num_forged = len(forged_indices)
-    
-        # Create positive pairs (same class)
-        for i in range(num_genuine):
-            for j in range(i + 1, min(i + 3, num_genuine)):
-                idx1, idx2 = genuine_indices[i], genuine_indices[j]
-                pairs.append([images[idx1], images[idx2]])
-                pair_labels.append(1)
+    def compute_centroid_and_adaptive_threshold(self, genuine_images: List, forged_images: Optional[List] = None) -> Tuple[List[float], float]:
+        """Compute centroid and adaptive threshold using EER optimization
         
-        # Create negative pairs
-        max_neg_pairs = len(pairs) * 2
-        neg_pair_count = 0
+        Args:
+            genuine_images: List of genuine signature images
+            forged_images: Optional list of forged signature images
+            
+        Returns:
+            Tuple of (centroid as list, threshold as float)
+        """
+        if not genuine_images:
+            raise ValueError("No genuine images provided")
         
-        for i in range(num_genuine):
-            for j in range(min(3, num_forged)):
-                if neg_pair_count >= max_neg_pairs:
-                    break
-                genuine_idx = genuine_indices[i]
-                forged_idx = forged_indices[j % num_forged]
-                pairs.append([images[genuine_idx], images[forged_idx]])
-                pair_labels.append(0)
-                neg_pair_count += 1
-    
-        # Convert to arrays
-        pairs = np.array(pairs, dtype=np.float32)
-        pair_labels = np.array(pair_labels, dtype=np.float32)
-    
-        # Shuffle
-        indices = np.arange(len(pairs))
-        np.random.RandomState(42).shuffle(indices)
-        pairs = pairs[indices]
-        pair_labels = pair_labels[indices]
-    
-        # Split into input arrays
-        input_a = pairs[:, 0]
-        input_b = pairs[:, 1]
-    
-        logger.info(f"Created {len(pairs)} training pairs: {np.sum(pair_labels)} positive, {len(pairs) - np.sum(pair_labels)} negative")
-        logger.info(f"Input shapes: input_a={input_a.shape}, input_b={input_b.shape}, labels={pair_labels.shape}")
-    
-        return input_a, input_b, pair_labels
-    
-    def train_with_augmented_data(self, all_images, all_labels, validation_split=0.2):
-        """Train the signature verification model with augmented data"""
-        try:
-            # Prepare balanced data
-            input_a, input_b, labels = self.prepare_augmented_data(all_images, all_labels)
-            
-            # Create model
-            self.model = self.create_siamese_network()
-            
-            # Callbacks for CPU-optimized training
-            callbacks = [
-                keras.callbacks.EarlyStopping(
-                    monitor='val_loss',
-                    patience=15,
-                    restore_best_weights=True,
-                    verbose=1
-                ),
-                keras.callbacks.ReduceLROnPlateau(
-                    monitor='val_loss',
-                    factor=0.5,
-                    patience=7,
-                    min_lr=1e-6,
-                    verbose=1
-                ),
-                keras.callbacks.ModelCheckpoint(
-                    filepath='temp_best_model.keras',
-                    monitor='val_auc',
-                    mode='max',
-                    save_best_only=True,
-                    verbose=0
-                )
-            ]
-            
-            # Custom training configuration for CPU
-            # Reduce batch size for CPU memory efficiency
-            cpu_batch_size = min(self.batch_size, 16)
-            
-            # Train the model
-            history = self.model.fit(
-                [input_a, input_b],
-                labels,
-                batch_size=cpu_batch_size,
-                epochs=self.epochs,
-                validation_split=validation_split,
-                callbacks=callbacks,
-                verbose=1,
-            )
-            
-            # Load best model if checkpoint exists
-            try:
-                self.model = keras.models.load_model('temp_best_model.keras', safe_mode=False)
-                import os
-                if os.path.exists('temp_best_model.keras'):
-                    os.remove('temp_best_model.keras')
-            except:
-                pass
-            
-            return history
-            
-        except Exception as e:
-            logger.error(f"Error during training: {e}")
-            raise
-    
-    def compute_centroid_and_adaptive_threshold(self, genuine_images, forged_images=None):
-        """Compute centroid and adaptive threshold using statistical methods"""
-        if self.embedding_model is None:
-            raise ValueError("Embedding model not available")
+        # Get embeddings for genuine samples
+        embeddings = self.embed_images(genuine_images)
+        centroid = np.mean(embeddings, axis=0)
         
-        # Get genuine embeddings
-        genuine_embeddings = self.embed_images(genuine_images)
+        # Compute distances for genuine samples
+        genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
         
-        # Compute centroid (prototype)
-        centroid = np.mean(genuine_embeddings, axis=0)
-        
-        # Calculate distances from genuine samples to centroid
-        genuine_distances = np.linalg.norm(genuine_embeddings - centroid, axis=1)
-        
-        # Statistical threshold calculation
-        mean_dist = np.mean(genuine_distances)
-        std_dist = np.std(genuine_distances)
-        
-        # Adaptive threshold strategies
-        if forged_images is not None and len(forged_images) > 0:
-            # If we have forged samples, use them for better calibration
+        if forged_images and len(forged_images) > 0:
+            # If we have forged samples, optimize threshold using EER
             forged_embeddings = self.embed_images(forged_images)
-            forged_distances = np.linalg.norm(forged_embeddings - centroid, axis=1)
+            forged_dists = np.linalg.norm(forged_embeddings - centroid, axis=1)
             
-            # Find optimal threshold using ROC curve analysis
-            threshold = self._find_optimal_threshold(genuine_distances, forged_distances)
+            # Find optimal threshold using ROC analysis
+            threshold = self._find_eer_threshold(genuine_dists, forged_dists)
+            
+            logger.info(f"Computed adaptive threshold: {threshold:.4f}")
         else:
-            # Conservative threshold: mean + 2*std covers ~95% of genuine signatures
-            threshold = mean_dist + 2.0 * std_dist
-            
-            # Apply bounds to prevent extreme thresholds
-            max_threshold = mean_dist + 3.0 * std_dist
-            min_threshold = mean_dist + 0.5 * std_dist
-            threshold = np.clip(threshold, min_threshold, max_threshold)
+            # Use statistical approach if no forged samples
+            # Set threshold at 95th percentile with 20% margin
+            threshold = float(np.percentile(genuine_dists, 95) * 1.2)
+            logger.info(f"Computed statistical threshold: {threshold:.4f}")
         
-        logger.info(f"Threshold calibration: mean={mean_dist:.3f}, std={std_dist:.3f}, threshold={threshold:.3f}")
-        
-        return centroid.tolist(), float(threshold)
+        return centroid.tolist(), threshold
     
-    def _find_optimal_threshold(self, genuine_distances, forged_distances):
-        """Find optimal threshold using Equal Error Rate (EER)"""
-        all_distances = np.concatenate([genuine_distances, forged_distances])
-        thresholds = np.percentile(all_distances, np.linspace(5, 95, 50))
+    def _find_eer_threshold(self, genuine_dists: np.ndarray, forged_dists: np.ndarray) -> float:
+        """Find Equal Error Rate threshold"""
+        all_dists = np.concatenate([genuine_dists, forged_dists])
         
-        best_threshold = thresholds[0]
-        best_score = float('inf')
+        best_threshold = 0.5
+        best_eer = 1.0
         
-        for threshold in thresholds:
-            # False Rejection Rate (genuine rejected)
-            frr = np.sum(genuine_distances > threshold) / len(genuine_distances)
-            # False Acceptance Rate (forged accepted)
-            far = np.sum(forged_distances <= threshold) / len(forged_distances)
+        for percentile in np.linspace(5, 95, 50):
+            threshold = np.percentile(all_dists, percentile)
             
-            # Find threshold where FRR ≈ FAR (Equal Error Rate)
-            eer_score = abs(frr - far)
+            # Calculate FAR and FRR
+            frr = np.mean(genuine_dists > threshold)  # False Rejection Rate
+            far = np.mean(forged_dists <= threshold)  # False Acceptance Rate
             
-            # Also consider overall error
-            total_error = 0.5 * (frr + far)
-            combined_score = eer_score + 0.1 * total_error
+            # EER is when FAR ≈ FRR
+            eer = abs(frr - far)
             
-            if combined_score < best_score:
-                best_score = combined_score
+            if eer < best_eer:
+                best_eer = eer
                 best_threshold = threshold
         
-        return float(best_threshold)
+        # Add safety margin (10% buffer)
+        return float(best_threshold * 1.1)
     
-    def embed_images(self, images):
-        """Generate embeddings for a list of PIL images"""
+    def embed_images(self, images: List[Union[np.ndarray, Image.Image]]) -> np.ndarray:
+        """Generate normalized embeddings for images"""
         if self.embedding_model is None:
             raise ValueError("Embedding model not available")
         
@@ -362,59 +212,377 @@ class SignatureVerificationModel:
             if hasattr(img, 'convert'):  # PIL Image
                 arr = np.array(img.convert('RGB'))
             else:
-                arr = np.array(img)
+                arr = img
             
-            # Ensure correct shape
-            if arr.shape[-1] != 3:
-                if len(arr.shape) == 2:  # Grayscale
-                    arr = np.stack([arr] * 3, axis=-1)
-                elif arr.shape[-1] == 4:  # RGBA
-                    arr = arr[:, :, :3]
+            # Ensure correct shape and dtype
+            if arr.ndim == 2:
+                arr = np.stack([arr, arr, arr], axis=-1)
+            elif arr.shape[-1] == 4:
+                arr = arr[..., :3]
             
+            # FIXED: Ensure float32 dtype
+            arr = arr.astype(np.float32)
+            
+            # Preprocess
             arr = tf.convert_to_tensor(arr, dtype=tf.float32)
             arr = self.preprocess_image(arr)
             batch.append(arr)
         
         batch_tensor = tf.stack(batch, axis=0)
         embeddings = self.embedding_model.predict(batch_tensor, verbose=0)
+        
+        # Embeddings are already L2 normalized in the model
         return embeddings
     
-    def preprocess_image(self, image):
-        """Enhanced preprocessing for better feature extraction"""
+    def prepare_augmented_data(self, all_images, all_labels):
+        """Prepare training data from augmented images and labels"""
+        # Convert PIL images to numpy arrays with consistent dtype and 3 channels
+        img_arrays = []
+        for img in all_images:
+            arr = np.array(img, dtype=np.uint8)
+            if arr.ndim == 2:
+                arr = np.stack([arr, arr, arr], axis=-1)
+            if arr.shape[-1] == 4:
+                arr = arr[..., :3]
+            # Ensure consistent shape and dtype
+            arr = arr.astype(np.float32)
+            img_arrays.append(arr)
+    
+        images = np.stack(img_arrays, axis=0)
+        labels = np.array(all_labels, dtype=bool)
+    
+        # Debug: print shapes and dtypes
+        logger.info(f"prepare_augmented_data: images shape={images.shape}, dtype={images.dtype}")
+        logger.info(f"prepare_augmented_data: labels shape={labels.shape}, dtype={labels.dtype}")
+    
+        # Create pairs for Siamese training
+        pairs = []
+        pair_labels = []
+    
+        # Generate positive pairs (same class)
+        genuine_indices = np.where(labels == True)[0]
+        forged_indices = np.where(labels == False)[0]
+    
+        # Genuine pairs
+        for i in range(len(genuine_indices)):
+            for j in range(i + 1, min(i + 3, len(genuine_indices))):  # Limit pairs per image
+                idx1, idx2 = genuine_indices[i], genuine_indices[j]
+                pairs.append([images[idx1], images[idx2]])
+                pair_labels.append(1)  # Similar
+    
+        # Forged pairs
+        for i in range(len(forged_indices)):
+            for j in range(i + 1, min(i + 2, len(forged_indices))):  # Limit pairs per image
+                idx1, idx2 = forged_indices[i], forged_indices[j]
+                pairs.append([images[idx1], images[idx2]])
+                pair_labels.append(1)  # Similar
+    
+        # Generate negative pairs (different classes)
+        for i in range(min(len(genuine_indices), len(forged_indices))):
+            for j in range(min(2, len(forged_indices))):  # Limit negative pairs
+                genuine_idx = genuine_indices[i]
+                forged_idx = forged_indices[j]
+                pairs.append([images[genuine_idx], images[forged_idx]])
+                pair_labels.append(0)  # Different
+    
+        # Convert to numpy arrays with consistent dtype
+        pairs = np.stack(pairs, axis=0).astype(np.float32)
+        pair_labels = np.array(pair_labels, dtype=np.float32)
+    
+        # Debug: print final shapes and dtypes
+        logger.info(f"prepare_augmented_data final: pairs shape={pairs.shape}, dtype={pairs.dtype}")
+        logger.info(f"prepare_augmented_data final: pair_labels shape={pair_labels.shape}, dtype={pair_labels.dtype}")
+    
+        # Split into input_a and input_b
+        input_a = pairs[:, 0]
+        input_b = pairs[:, 1]
+    
+        # Debug: print split shapes
+        logger.info(f"prepare_augmented_data split: input_a shape={input_a.shape}, dtype={input_a.dtype}")
+        logger.info(f"prepare_augmented_data split: input_b shape={input_b.shape}, dtype={input_b.dtype}")
+    
+        return input_a, input_b, pair_labels
+    
+    def prepare_augmented_pairs(self, images: List, labels: List) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Prepare training pairs from augmented data with balanced sampling"""
+        genuine_imgs = [img for img, lbl in zip(images, labels) if lbl]
+        forged_imgs = [img for img, lbl in zip(images, labels) if not lbl]
+    
+        pairs_a = []
+        pairs_b = []
+        pair_labels = []
+    
+        # Generate positive pairs (genuine-genuine)
+        num_positive = min(len(genuine_imgs) * 10, 5000)  # Cap at 5000 pairs
+        for _ in range(num_positive):
+            idx1, idx2 = np.random.choice(len(genuine_imgs), 2, replace=True)
+            pairs_a.append(genuine_imgs[idx1])
+            pairs_b.append(genuine_imgs[idx2])
+            pair_labels.append(1)
+    
+        # Generate negative pairs (genuine-forged)
+        if forged_imgs:
+            num_negative = num_positive
+            for _ in range(num_negative):
+                idx1 = np.random.choice(len(genuine_imgs))
+                idx2 = np.random.choice(len(forged_imgs))
+                pairs_a.append(genuine_imgs[idx1])
+                pairs_b.append(forged_imgs[idx2])
+                pair_labels.append(0)
+    
+        # Generate hard negative pairs (forged-forged) - small percentage
+        if forged_imgs and len(forged_imgs) > 1:
+            num_hard_negative = num_positive // 10  # 10% hard negatives
+            for _ in range(num_hard_negative):
+                idx1, idx2 = np.random.choice(len(forged_imgs), 2, replace=False)
+                pairs_a.append(forged_imgs[idx1])
+                pairs_b.append(forged_imgs[idx2])
+                pair_labels.append(0)
+    
+        # Convert to numpy arrays with consistent dtype
+        pairs_a = self._process_batch(pairs_a)
+        pairs_b = self._process_batch(pairs_b)
+        pair_labels = np.array(pair_labels, dtype=np.float32)
+    
+        # Debug: print shapes and dtypes
+        logger.info(f"prepare_augmented_pairs shapes: pairs_a={pairs_a.shape}, pairs_b={pairs_b.shape}, labels={pair_labels.shape}")
+        logger.info(f"prepare_augmented_pairs dtypes: pairs_a={pairs_a.dtype}, pairs_b={pairs_b.dtype}, labels={pair_labels.dtype}")
+    
+        # Shuffle
+        indices = np.arange(len(pair_labels))
+        np.random.shuffle(indices)
+    
+        return pairs_a[indices], pairs_b[indices], pair_labels[indices]
+    
+    def preprocess_image(self, image):  # <-- ADD/UPDATE HERE
+        """Preprocess image for the model"""
+        # Ensure input is float32 tensor
+        if isinstance(image, np.ndarray):
+            image = tf.convert_to_tensor(image, dtype=tf.float32)
+        else:
+            image = tf.cast(image, tf.float32)
+        
         # Resize image
         image = tf.image.resize(image, [self.image_size, self.image_size])
-        
-        # Normalize to [-1, 1] for better gradient flow
-        image = tf.cast(image, tf.float32) / 127.5 - 1.0
-        
+        # MobileNetV2 preprocessing expects float [-1,1]
+        image = (image / 127.5) - 1.0
         return image
     
-    def save_embedding_model(self, filepath):
-        """Save the embedding model separately"""
-        if self.embedding_model is None:
-            raise ValueError("No embedding model to save")
-        self.embedding_model.save(filepath)
-        logger.info(f"Embedding model saved to {filepath}")
+    def _process_batch(self, images: List) -> np.ndarray:
+        """Process batch of images to tensor"""
+        processed = []
+        for img in images:
+            if hasattr(img, 'convert'):  # PIL Image
+                arr = np.array(img.convert('RGB'))
+            else:
+                arr = img
+            
+            # FIXED: Ensure correct dtype
+            if arr.ndim == 2:
+                arr = np.stack([arr, arr, arr], axis=-1)
+            
+            # FIXED: Use float32 throughout
+            arr = arr.astype(np.float32)
+            
+            arr = tf.image.resize(arr, [self.image_size, self.image_size])
+            arr = tf.cast(arr, tf.float32)
+            arr = (arr / 127.5) - 1.0  # MobileNetV2 preprocessing
+            processed.append(arr.numpy())
+        
+        return np.array(processed, dtype=np.float32)
     
-    def save_model(self, filepath):
-        """Save the trained model"""
+    def train_with_augmented_data(self, all_images: List, all_labels: List, validation_split: float = 0.2) -> keras.callbacks.History:
+        """Train with augmented data using enhanced callbacks and strategies"""
+        try:
+            # Prepare data
+            input_a, input_b, labels = self.prepare_augmented_data(all_images, all_labels)
+            
+            if len(labels) == 0:
+                raise ValueError("No training pairs could be created")
+            
+            logger.info(f"Training with {len(labels)} pairs ({np.sum(labels)} positive, {len(labels) - np.sum(labels)} negative)")
+            
+            # Create model
+            self.model = self.create_siamese_network()
+            
+            # Enhanced callbacks
+            callbacks = self._create_callbacks()
+            
+            # Custom training loop with gradient accumulation for better CPU performance
+            if self.use_gradient_accumulation:
+                history = self._train_with_gradient_accumulation(
+                    input_a, input_b, labels, 
+                    validation_split, callbacks
+                )
+            else:
+                # Standard training
+                history = self.model.fit(
+                    [input_a, input_b], labels,
+                    batch_size=self.batch_size,
+                    epochs=self.epochs,
+                    validation_split=validation_split,
+                    callbacks=callbacks,
+                    verbose=1
+                )
+            
+            return history
+            
+        except Exception as e:
+            logger.error(f"Training failed: {e}")
+            raise
+    
+    def _create_callbacks(self) -> List[keras.callbacks.Callback]:
+        """Create enhanced training callbacks"""
+        callbacks = [
+            keras.callbacks.EarlyStopping(
+                monitor='val_auc',
+                patience=15,
+                restore_best_weights=True,
+                mode='max',
+                min_delta=0.001,
+                verbose=1
+            ),
+            keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,
+                patience=5,
+                min_lr=1e-7,
+                verbose=1
+            ),
+            # Custom callback for learning rate warmup
+            WarmupScheduler(
+                warmup_epochs=3,
+                initial_lr=self.learning_rate / 10,
+                target_lr=self.learning_rate
+            ),
+            # Track best model based on validation AUC
+            keras.callbacks.ModelCheckpoint(
+                filepath='best_model_checkpoint.keras',
+                monitor='val_auc',
+                mode='max',
+                save_best_only=True,
+                save_weights_only=False,
+                verbose=0
+            )
+        ]
+        
+        return callbacks
+    
+    def _train_with_gradient_accumulation(self, input_a, input_b, labels, 
+                                         validation_split, callbacks):
+        """Custom training with gradient accumulation for CPU efficiency"""
+        # Split data
+        val_size = int(len(labels) * validation_split)
+        val_indices = np.random.choice(len(labels), val_size, replace=False)
+        train_mask = np.ones(len(labels), dtype=bool)
+        train_mask[val_indices] = False
+        
+        train_a, train_b = input_a[train_mask], input_b[train_mask]
+        train_y = labels[train_mask]
+        val_a, val_b = input_a[val_indices], input_b[val_indices]
+        val_y = labels[val_indices]
+        
+        # Effective batch size
+        effective_batch = self.batch_size * self.gradient_accumulation_steps
+        
+        # Standard training with adjusted batch size
+        history = self.model.fit(
+            [train_a, train_b], train_y,
+            batch_size=effective_batch,
+            epochs=self.epochs,
+            validation_data=([val_a, val_b], val_y),
+            callbacks=callbacks,
+            verbose=1
+        )
+        
+        return history
+    
+    def save_model(self, filepath: str):
+        """Save the complete model"""
         if self.model is None:
             raise ValueError("No model to save")
-        self.model.save(filepath)
+        
+        # Create directory if needed
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Save full model
+        self.model.save(filepath, save_format='keras')
         logger.info(f"Model saved to {filepath}")
     
-    def load_model(self, filepath):
-        """Load a trained model"""
-        self.model = keras.models.load_model(filepath, safe_mode=False)
+    def save_embedding_model(self, filepath: str):
+        """Save only the embedding model for faster inference"""
+        if self.embedding_model is None:
+            raise ValueError("No embedding model to save")
         
-        # Reconstruct embedding model
+        # Create directory if needed
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Save embedding model
+        self.embedding_model.save(filepath, save_format='keras')
+        logger.info(f"Embedding model saved to {filepath}")
+    
+    def load_model(self, filepath: str):
+        """Load a saved model"""
         try:
-            embedding_branch = self.model.get_layer('embedding_branch')
-            single_input = layers.Input(shape=(self.image_size, self.image_size, 3))
-            single_embedding = embedding_branch(single_input)
-            self.embedding_model = keras.Model(inputs=single_input, outputs=single_embedding)
+            # Load with custom objects if needed
+            self.model = keras.models.load_model(filepath, compile=True, safe_mode=False)
+            
+            # Extract embedding model
+            self._extract_embedding_model()
+            
+            logger.info(f"Model loaded from {filepath}")
         except Exception as e:
-            logger.error(f"Could not reconstruct embedding model: {e}")
-            self.embedding_model = None
+            logger.error(f"Failed to load model: {e}")
+            raise
+    
+    def _extract_embedding_model(self):
+        """Extract embedding model from full model"""
+        if self.model is None:
+            return
         
-        logger.info(f"Model loaded from {filepath}")
+        # Find the embedding branch in the model
+        for layer in self.model.layers:
+            if 'embedding_branch' in layer.name:
+                self.embedding_model = layer
+                break
+    
+    def verify_signature(self, test_image: Union[np.ndarray, Image.Image], 
+                        centroid: np.ndarray, threshold: float) -> Tuple[bool, float, float]:
+        """Verify a signature against stored prototype
+        
+        Returns:
+            Tuple of (is_genuine, distance, confidence_score)
+        """
+        # Get embedding for test image
+        test_embedding = self.embed_images([test_image])[0]
+        
+        # Calculate distance to centroid
+        distance = float(np.linalg.norm(test_embedding - centroid))
+        
+        # Determine if genuine
+        is_genuine = distance <= threshold
+        
+        # Calculate confidence score (0-1, higher is more confident)
+        if threshold > 0:
+            # Normalize distance to confidence
+            confidence = max(0, 1 - (distance / threshold))
+        else:
+            confidence = 0.5
+        
+        return is_genuine, distance, confidence
+
+
+class WarmupScheduler(keras.callbacks.Callback):
+    """Custom callback for learning rate warmup"""
+    
+    def __init__(self, warmup_epochs, initial_lr, target_lr):
+        super().__init__()
+        self.warmup_epochs = warmup_epochs
+        self.initial_lr = initial_lr
+        self.target_lr = target_lr
+    
+    def on_epoch_begin(self, epoch, logs=None):
+        if epoch < self.warmup_epochs:
+            lr = self.initial_lr + (self.target_lr - self.initial_lr) * (epoch / self.warmup_epochs)
+            keras.backend.set_value(self.model.optimizer.lr, lr)
+            logger.debug(f"Epoch {epoch}: Learning rate warmed up to {lr:.6f}")

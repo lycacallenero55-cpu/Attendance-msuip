@@ -166,13 +166,14 @@ export class AIService {
   ): Promise<AIVerificationResponse> {
     try {
       const formData = new FormData();
-      formData.append('file', imageFile);
+      // Backend expects 'test_file' for verification/identify endpoints
+      formData.append('test_file', imageFile);
       
       if (sessionId) {
         formData.append('session_id', sessionId.toString());
       }
 
-      const response = await fetch(`${this.baseUrl}/api/verification/verify`, {
+      const response = await fetch(`${this.baseUrl}/api/verification/identify`, {
         method: 'POST',
         body: formData,
       });
@@ -196,6 +197,20 @@ export class AIService {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
+  }
+
+  /**
+   * Get a browser-displayable preview PNG for any uploaded image (e.g., TIFF)
+   */
+  async getPreviewURL(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const resp = await fetch(`${this.baseUrl}/api/utils/preview`, { method: 'POST', body: formData });
+    if (!resp.ok) {
+      throw new Error('Failed to generate preview');
+    }
+    const blob = await resp.blob();
+    return URL.createObjectURL(blob);
   }
 
   /**

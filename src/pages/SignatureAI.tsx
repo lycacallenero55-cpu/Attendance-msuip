@@ -1,5 +1,4 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +34,7 @@ import {
 import { aiService, AI_CONFIG } from '@/lib/aiService';
 import { fetchStudents } from '@/lib/supabaseService';
 import type { Student } from '@/types';
+import { Progress } from '@/components/ui/progress';
 
 interface TrainingFile {
   file: File;
@@ -57,6 +57,10 @@ const SignatureAI = () => {
   const [trainingStatus, setTrainingStatus] = useState<string>('');
   const [trainingStage, setTrainingStage] = useState<'idle' | 'preprocessing' | 'training' | 'validation' | 'completed' | 'error'>('idle');
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const trainingStartTimeRef = useRef<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
   
   // Verification Section State
   const [verificationFile, setVerificationFile] = useState<File | null>(null);
@@ -125,92 +129,77 @@ const SignatureAI = () => {
     return () => document.removeEventListener('click', handleClick);
   }, [hasUnsavedChanges, location.pathname, handleClose]);
 
-  type SerializableStudent = Pick<Student, 'id' | 'student_id' | 'firstname' | 'surname' | 'program' | 'year' | 'section'>;
-  type SerializableTraining = { name: string; type: string; size: number; dataUrl: string };
 
-  const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+type SerializableStudent = Pick<Student, 'id' | 'student_id' | 'firstname' | 'surname' | 'program' | 'year' | 'section'>;
+type SerializableTraining = { name: string; type: string; size: number };
 
-  const dataUrlToFile = (dataUrl: string, name: string, type: string): File => {
-    const arr = dataUrl.split(',');
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) u8arr[n] = bstr.charCodeAt(n);
-    return new File([u8arr], name, { type });
-  };
+// No longer serializing file contents to avoid storage quota issues
 
-  const saveSessionState = async (extra?: { addGenuine?: File[]; addForged?: File[] }) => {
-    try {
-      // Prepare serializable lists. Append newly added files efficiently.
-      const genuineSerial: SerializableTraining[] = [];
-      for (const item of genuineFiles) {
-        genuineSerial.push({
-          name: item.file.name,
-          type: item.file.type,
-          size: item.file.size,
-          dataUrl: await fileToDataUrl(item.file),
-        });
-      }
-      const forgedSerial: SerializableTraining[] = [];
-      for (const item of forgedFiles) {
-        forgedSerial.push({
-          name: item.file.name,
-          type: item.file.type,
-          size: item.file.size,
-          dataUrl: await fileToDataUrl(item.file),
-        });
-      }
-      const studentSerial: SerializableStudent | null = selectedStudent
-        ? {
-            id: selectedStudent.id,
-            student_id: selectedStudent.student_id,
-            firstname: selectedStudent.firstname,
-            surname: selectedStudent.surname,
-            program: selectedStudent.program,
-            year: selectedStudent.year,
-            section: selectedStudent.section,
-          }
-        : null;
-      const payload = {
-        selectedStudent: studentSerial,
-        currentTrainingSet,
-        visibleCounts,
-        genuine: genuineSerial,
-        forged: forgedSerial,
-        timestamp: Date.now(), // Add timestamp for debugging
-      };
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      // Mark that we're navigating internally (not refreshing)
-      sessionStorage.setItem(NAVIGATION_FLAG, 'true');
-      console.log('State saved successfully', { timestamp: payload.timestamp });
-    } catch (e) {
-      console.warn('Failed saving session state', e);
+// No deserialization from data URLs
+
+const saveSessionState = async (extra?: { addGenuine?: File[]; addForged?: File[] }) => {
+  try {
+    // Prepare serializable lists. Append newly added files efficiently.
+    const genuineSerial: SerializableTraining[] = [];
+    for (const item of genuineFiles) {
+      genuineSerial.push({
+        name: item.file.name,
+        type: item.file.type,
+        size: item.file.size,
+      });
     }
-  };
+    const forgedSerial: SerializableTraining[] = [];
+    for (const item of forgedFiles) {
+      forgedSerial.push({
+        name: item.file.name,
+        type: item.file.type,
+        size: item.file.size,
+      });
+    }
+    const studentSerial: SerializableStudent | null = selectedStudent
+      ? {
+          id: selectedStudent.id,
+          student_id: selectedStudent.student_id,
+          firstname: selectedStudent.firstname,
+          surname: selectedStudent.surname,
+          program: selectedStudent.program,
+          year: selectedStudent.year,
+          section: selectedStudent.section,
+        }
+      : null;
+    const payload = {
+      selectedStudent: studentSerial,
+      currentTrainingSet,
+      visibleCounts,
+      genuine: genuineSerial,
+      forged: forgedSerial,
+      timestamp: Date.now(), // Add timestamp for debugging
+    };
+    const json = JSON.stringify(payload);
+    if (json.length < 1500000) {
+      sessionStorage.setItem(STORAGE_KEY, json);
+    }
+    // Mark that we're navigating internally (not refreshing)
+    sessionStorage.setItem(NAVIGATION_FLAG, 'true');
+    console.log('State saved successfully', { timestamp: payload.timestamp });
+  } catch (e) {
+    console.warn('Failed saving session state', e);
+  }
+};
 
-  const loadSessionState = async () => {
-    try {
-      // Check if we have a navigation flag indicating internal navigation
-      const hasNavigationFlag = sessionStorage.getItem(NAVIGATION_FLAG);
-      
-      // Only clear state on actual browser refresh/restart, preserve for internal navigation
-      if (!hasNavigationFlag && window.performance.navigation && window.performance.navigation.type === 1) {
-        // This is a browser refresh without navigation flag - clear state for fresh start
-        console.log('Page reload detected, clearing saved state');
-        sessionStorage.removeItem(STORAGE_KEY);
-        sessionStorage.removeItem(NAVIGATION_FLAG);
-        return;
-      }
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        console.log('No saved state found');
-        return;
-      }
+const loadSessionState = async () => {
+  try {
+    // Check if we have a navigation flag indicating internal navigation
+    const hasNavigationFlag = sessionStorage.getItem(NAVIGATION_FLAG);
+    
+    // Only clear state on actual browser refresh/restart, preserve for internal navigation
+    if (!hasNavigationFlag && window.performance.navigation && window.performance.navigation.type === 1) {
+      // This is a browser refresh without navigation flag - clear state for fresh start
+      console.log('Page reload detected, clearing saved state');
+      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(NAVIGATION_FLAG);
+      return;
+    }
       console.log('Loading saved state...');
       const parsed = JSON.parse(raw) as {
         selectedStudent: SerializableStudent | null;
@@ -384,10 +373,9 @@ const SignatureAI = () => {
   };
 
   const getImageQualityScore = (file: File): number => {
-    // Basic quality assessment based on file size and type
-    const sizeScore = Math.min(file.size / (1024 * 1024), 5) / 5; // Max 5MB = 1.0
-    const typeScore = ['image/png', 'image/jpeg'].includes(file.type) ? 1.0 : 0.5;
-    return (sizeScore + typeScore) / 2;
+    // Basic quality assessment based on file size only
+    const sizeScore = Math.min(file.size / (1024 * 1024), 10) / 10; // Max 10MB = 1.0
+    return sizeScore;
   };
 
   const getOverallDataQuality = () => {
@@ -464,11 +452,10 @@ const SignatureAI = () => {
 
   // Training Functions
   const validateFiles = (files: File[]): File[] => {
-    const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB to align with backend
     const valid: File[] = [];
     let rejected = 0;
     files.forEach((f) => {
-      // Accept any file that starts with 'image/' to support all common image formats
       if (!f.type.startsWith('image/')) {
         rejected++;
         return;
@@ -482,19 +469,30 @@ const SignatureAI = () => {
     if (rejected > 0) {
       toast({
         title: 'Some files were ignored',
-        description: 'Only image files up to 5MB are allowed.',
+        description: 'Only image files up to 10MB are allowed.',
         variant: 'destructive',
       });
     }
     return valid;
   };
 
-  const handleTrainingFilesChange = (files: File[], setType: 'genuine' | 'forged') => {
+  const handleTrainingFilesChange = async (files: File[], setType: 'genuine' | 'forged') => {
     const safeFiles = validateFiles(files);
-    const newFiles = safeFiles.map(file => ({
-      file,
-      preview: URL.createObjectURL(file)
-    }));
+    const newFilesPromises = safeFiles.map(async (file) => {
+      let preview = '';
+      try {
+        // Use native preview for most images; fallback to backend preview for TIFF or unknown
+        if (file.type.startsWith('image/') && file.type !== 'image/tiff' && !file.name.toLowerCase().endsWith('.tif') && !file.name.toLowerCase().endsWith('.tiff')) {
+          preview = URL.createObjectURL(file);
+        } else {
+          preview = await aiService.getPreviewURL(file);
+        }
+      } catch {
+        preview = URL.createObjectURL(file);
+      }
+      return { file, preview };
+    });
+    const newFiles = await Promise.all(newFilesPromises);
     if (setType === 'genuine') {
       setGenuineFiles(prev => [...prev, ...newFiles]);
     } else {
@@ -535,8 +533,15 @@ const SignatureAI = () => {
     setIsTraining(true);
     setTrainingResult(null);
     setTrainingProgress(0);
-    setTrainingStage('training');
+    setTrainingStage('preprocessing');
     setEstimatedTimeRemaining('');
+    setElapsedMs(0);
+    trainingStartTimeRef.current = Date.now();
+    // Close any previous stream
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
 
     try {
       // Start async training job
@@ -546,44 +551,40 @@ const SignatureAI = () => {
         forgedFiles.map(f => f.file)
       );
       
+      setJobId(asyncResponse.job_id);
       // Subscribe to real-time progress updates
       const eventSource = aiService.subscribeToJobProgress(
         asyncResponse.job_id,
         (job) => {
-          setTrainingProgress(job.progress);
-          setTrainingStatus(job.current_stage);
-          
-          if (job.estimated_time_remaining) {
+          // Normalize stage
+          if (job.current_stage) setTrainingStage(job.current_stage as any);
+          setTrainingStatus(job.current_stage || '');
+          // Guard progress to be monotonically non-decreasing
+          setTrainingProgress((prev) => Math.max(prev, Math.min(100, Math.max(0, job.progress || 0))));
+          // ETA
+          if (typeof job.estimated_time_remaining === 'number') {
             const minutes = Math.floor(job.estimated_time_remaining / 60);
             const seconds = job.estimated_time_remaining % 60;
             setEstimatedTimeRemaining(`~${minutes}:${seconds.toString().padStart(2, '0')} remaining`);
+          } else {
+            setEstimatedTimeRemaining('');
           }
-          
+          // Completion handling
           if (job.status === 'completed') {
+            setTrainingProgress(100);
             setTrainingStage('completed');
             setTrainingStatus('Training completed!');
-            setEstimatedTimeRemaining('');
             setTrainingResult(job.result);
-            
-            toast({
-              title: "Training Completed",
-              description: "AI model has been successfully trained for this student",
-            });
-            
+            toast({ title: "Training Completed", description: "AI model has been successfully trained for this student" });
             eventSource.close();
+            eventSourceRef.current = null;
             setIsTraining(false);
           } else if (job.status === 'failed') {
             setTrainingStage('error');
             setTrainingStatus('Training failed');
-            setTrainingProgress(0);
-            
-            toast({
-              title: "Training Failed",
-              description: job.error || "Failed to complete training",
-              variant: "destructive",
-            });
-            
+            toast({ title: "Training Failed", description: job.error || "Failed to complete training", variant: "destructive" });
             eventSource.close();
+            eventSourceRef.current = null;
             setIsTraining(false);
           }
         },
@@ -591,18 +592,13 @@ const SignatureAI = () => {
           console.error('Training progress error:', error);
           setTrainingStage('error');
           setTrainingStatus('Connection error');
-          setTrainingProgress(0);
-          
-          toast({
-            title: "Connection Error",
-            description: "Lost connection to training progress updates",
-            variant: "destructive",
-          });
-          
+          toast({ title: "Connection Error", description: "Lost connection to training progress updates", variant: "destructive" });
           eventSource.close();
+          eventSourceRef.current = null;
           setIsTraining(false);
         }
       );
+      eventSourceRef.current = eventSource;
       
     } catch (error) {
       console.error('Training error:', error);
@@ -619,13 +615,28 @@ const SignatureAI = () => {
   };
 
   // Verification Functions
-  const handleVerificationFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVerificationFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.files?.[0];
     const valid = raw ? validateFiles([raw]) : [];
     const file = valid[0];
     if (file) {
+      // Revoke previous preview URL if any
+      if (verificationPreview) {
+        URL.revokeObjectURL(verificationPreview);
+      }
       setVerificationFile(file);
-      setVerificationPreview(URL.createObjectURL(file));
+      try {
+        let preview = '';
+        const name = file.name.toLowerCase();
+        if (file.type.startsWith('image/') && file.type !== 'image/tiff' && !name.endsWith('.tif') && !name.endsWith('.tiff')) {
+          preview = URL.createObjectURL(file);
+        } else {
+          preview = await aiService.getPreviewURL(file);
+        }
+        setVerificationPreview(preview);
+      } catch {
+        setVerificationPreview(URL.createObjectURL(file));
+      }
       setVerificationResult(null);
       markDirty();
     }
@@ -694,9 +705,45 @@ const SignatureAI = () => {
     }
   };
 
+  // Elapsed timer ticker
+  useEffect(() => {
+    let interval: number | undefined;
+    if (isTraining) {
+      interval = window.setInterval(() => {
+        if (trainingStartTimeRef.current) {
+          setElapsedMs(Date.now() - trainingStartTimeRef.current);
+        }
+      }, 1000);
+    } else {
+      setElapsedMs(0);
+    }
+    return () => {
+      if (interval) window.clearInterval(interval);
+    };
+  }, [isTraining]);
+
+  const formatDuration = (ms: number): string => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   // Modal Functions
   type ModalContext = { kind: 'training', setType: 'genuine' | 'forged' } | { kind: 'verification' } | null;
   const [modalContext, setModalContext] = useState<ModalContext>(null);
+  const getModalFilename = (): string => {
+    if (!isModalOpen) return '';
+    if (modalContext?.kind === 'training') {
+      const files = modalContext.setType === 'genuine' ? genuineFiles : forgedFiles;
+      const idx = files.findIndex(f => f.preview === modalImages[modalImageIndex]);
+      return idx >= 0 ? files[idx].file.name : '';
+    }
+    if (modalContext?.kind === 'verification') {
+      return verificationFile?.name || '';
+    }
+    return '';
+  };
 
   const openImageModal = (images: string[], startIndex: number = 0, context: ModalContext = null) => {
     setModalImages(images);
@@ -760,52 +807,12 @@ const SignatureAI = () => {
       return;
     }
 
-    if (!selectedStudent) {
-      toast({
-        title: "Error",
-        description: "Select a student first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Build reference set: use explicit referenceFiles if provided, otherwise
-    // fall back to Genuine training files currently uploaded in the UI.
-    const effectiveReferences: File[] =
-      referenceFiles.length > 0 ? referenceFiles : genuineFiles.map(g => g.file);
-    if (effectiveReferences.length === 0) {
-      toast({
-        title: "Reference Required",
-        description: "Upload some Genuine samples (left pane) or add references to verify",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsVerifying(true);
     setVerificationResult(null);
 
     try {
-      // Auto-select the model linked to the selected student
-      // We'll fetch trained models filtered by DB numeric id
-      const models = await aiService.getTrainedModels(selectedStudent.id);
-      const readyModel = models.find((m: any) => m.status === 'completed');
-      if (!readyModel) {
-        toast({
-          title: "No Trained Model",
-          description: "No trained model found for this student",
-          variant: "destructive",
-        });
-        setIsVerifying(false);
-        return;
-      }
-
-      // Prototype-based verify: only student_id + test_file
-      const form = new FormData();
-      form.append('student_id', String(selectedStudent.student_id));
-      form.append('test_file', verificationFile);
-      const resp = await fetch(`${AI_CONFIG.BASE_URL}/api/verification/verify`, { method: 'POST', body: form });
-      const result = await resp.json();
+      // Identification-based verify: only test_file
+      const result = await aiService.verifySignature(verificationFile);
       setVerificationResult(result);
       
       if (result.success) {
@@ -1149,6 +1156,16 @@ const SignatureAI = () => {
                 )}
               </Button>
 
+              {isTraining && (
+                <div className="space-y-2">
+                  <Progress value={trainingProgress} />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Elapsed: {formatDuration(elapsedMs)}</span>
+                    <span>{estimatedTimeRemaining || ''}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Training Results */}
               {trainingResult && (
                 <div className="space-y-3">
@@ -1452,7 +1469,16 @@ const SignatureAI = () => {
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] p-0">
             <DialogHeader className="p-6 pb-0">
-              <DialogTitle>Image Preview</DialogTitle>
+              <DialogTitle>
+                <div className="flex items-center justify-between">
+                  <span>Image Preview</span>
+                  {getModalFilename() && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[60%]" title={getModalFilename()}>
+                      {getModalFilename()}
+                    </span>
+                  )}
+                </div>
+              </DialogTitle>
             </DialogHeader>
             <div className="relative p-6">
               {modalImages.length > 0 && (

@@ -1,7 +1,7 @@
 import tensorflow as tf
 import os
 import logging
-import numpy as np  # ADD THIS MISSING IMPORT!
+import numpy as np  
 
 logger = logging.getLogger(__name__)
 
