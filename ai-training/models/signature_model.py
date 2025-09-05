@@ -80,7 +80,10 @@ class SignatureVerificationModel:
             y3 = layers.BatchNormalization()(y3)
             
             # L2 normalize embeddings for better metric learning
-            y3 = layers.Lambda(lambda x: tf.nn.l2_normalize(x, axis=1), output_shape=(128,))(y3)
+            def l2_normalize(x):
+                import tensorflow as tf
+                return tf.nn.l2_normalize(x, axis=1)
+            y3 = layers.Lambda(l2_normalize, output_shape=(128,))(y3)
             
             model = keras.Model(inputs=x, outputs=y3, name='embedding_branch')
             return model
@@ -93,14 +96,26 @@ class SignatureVerificationModel:
         embedding_b = embedding_network(input_b)
         
         # Multiple distance metrics for robustness
+        def l2_distance_func(x):
+            import tensorflow as tf
+            return tf.sqrt(tf.reduce_sum(tf.square(x[0] - x[1]), axis=1, keepdims=True))
+        
+        def cosine_distance_func(x):
+            import tensorflow as tf
+            return 1 - tf.reduce_sum(x[0] * x[1], axis=1, keepdims=True)
+        
+        def abs_diff_func(x):
+            import tensorflow as tf
+            return tf.abs(x[0] - x[1])
+        
         l2_distance = layers.Lambda(
-            lambda x: tf.sqrt(tf.reduce_sum(tf.square(x[0] - x[1]), axis=1, keepdims=True)),
+            l2_distance_func,
             output_shape=(1,),
             name='l2_distance'
         )([embedding_a, embedding_b])
         
         cosine_distance = layers.Lambda(
-            lambda x: 1 - tf.reduce_sum(x[0] * x[1], axis=1, keepdims=True),
+            cosine_distance_func,
             output_shape=(1,),
             name='cosine_distance'
         )([embedding_a, embedding_b])
@@ -109,7 +124,7 @@ class SignatureVerificationModel:
         merged = layers.Concatenate()([
             l2_distance,
             cosine_distance,
-            layers.Lambda(lambda x: tf.abs(x[0] - x[1]), output_shape=(128,))([embedding_a, embedding_b])
+            layers.Lambda(abs_diff_func, output_shape=(128,))([embedding_a, embedding_b])
         ])
         
         # Enhanced classification head
