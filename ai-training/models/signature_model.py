@@ -9,11 +9,19 @@ from typing import List, Tuple, Optional, Union
 from PIL import Image
 import os
 
+
+def lr_warmup_schedule(epoch, warmup_epochs=3, initial_lr=1e-4, target_lr=1e-3):
+    if epoch < warmup_epochs:
+         return initial_lr + (target_lr - initial_lr) * (epoch / float(max(1, warmup_epochs)))
+    return target_lr
+
 logger = logging.getLogger(__name__)
+
+
 
 class SignatureVerificationModel:
     """Enhanced Siamese Neural Network for Signature Verification with Prototype Learning"""
-    
+
     def __init__(self):
         self.model = None
         self.embedding_model = None
@@ -116,13 +124,8 @@ class SignatureVerificationModel:
         # Create the model
         model = keras.Model(inputs=[input_a, input_b], outputs=output, name='signature_verification')
         
-        # Use AdamW optimizer with cosine decay schedule
-        initial_learning_rate = self.learning_rate
-        decay_steps = 1000
-        lr_schedule = keras.optimizers.schedules.CosineDecay(
-            initial_learning_rate, decay_steps, alpha=0.1)
-        
-        optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+        # Use simple Adam with float LR so warmup/scheduler can adjust it
+        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate)
         
         # Custom metrics including AUC-ROC and AUC-PR
         model.compile(
@@ -476,12 +479,15 @@ class SignatureVerificationModel:
                 min_lr=1e-7,
                 verbose=1
             ),
-            # Custom callback for learning rate warmup
-            WarmupScheduler(
-                warmup_epochs=3,
-                initial_lr=self.learning_rate / 10,
-                target_lr=self.learning_rate
-            ),
+            keras.callbacks.LearningRateScheduler(
+                lambda epoch: lr_warmup_schedule(
+                    epoch,
+                    warmup_epochs=3,
+                    initial_lr=self.learning_rate / 10.0,
+                    target_lr=self.learning_rate
+                ),
+                verbose=0
+            ),            
             # Track best model based on validation AUC
             keras.callbacks.ModelCheckpoint(
                 filepath='best_model_checkpoint.keras',
@@ -551,16 +557,48 @@ class SignatureVerificationModel:
     def load_model(self, filepath: str):
         """Load a saved model"""
         try:
-            # Load with custom objects if needed
-            self.model = keras.models.load_model(filepath, compile=True, safe_mode=False)
+            # Try to load with custom objects for Lambda layers
+            def l2_normalize_with_shape(x):
+                return tf.nn.l2_normalize(x, axis=1)
+            
+            def abs_with_shape(x):
+                return tf.abs(x)
+            
+            def sqrt_with_shape(x):
+                return tf.sqrt(x)
+            
+            def reduce_sum_with_shape(x):
+                return tf.reduce_sum(x, axis=1, keepdims=True)
+            
+            def square_with_shape(x):
+                return tf.square(x)
+            
+            custom_objects = {
+                'tf': tf,
+                'tf.nn.l2_normalize': l2_normalize_with_shape,
+                'tf.math.abs': abs_with_shape,
+                'tf.sqrt': sqrt_with_shape,
+                'tf.reduce_sum': reduce_sum_with_shape,
+                'tf.square': square_with_shape,
+                'tf.abs': abs_with_shape,
+                'l2_normalize_with_shape': l2_normalize_with_shape,
+                'abs_with_shape': abs_with_shape,
+                'sqrt_with_shape': sqrt_with_shape,
+                'reduce_sum_with_shape': reduce_sum_with_shape,
+                'square_with_shape': square_with_shape,
+            }
+            
+            # Allow loading models containing Lambda layers used in older checkpoints
+            self.model = keras.models.load_model(filepath, compile=True, safe_mode=False, custom_objects=custom_objects)
             
             # Extract embedding model
             self._extract_embedding_model()
             
             logger.info(f"Model loaded from {filepath}")
+            
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
-            raise
+            raise ValueError(f"Model loading failed. This model may be from an incompatible version. Please retrain the student and try again. Error: {str(e)}")
     
     def _extract_embedding_model(self):
         """Extract embedding model from full model"""
@@ -611,9 +649,9 @@ class WarmupScheduler(keras.callbacks.Callback):
     def on_epoch_begin(self, epoch, logs=None):
         if epoch < self.warmup_epochs:
             lr = self.initial_lr + (self.target_lr - self.initial_lr) * (epoch / self.warmup_epochs)
-            # FIXED: Handle both old and new Keras versions
-            if hasattr(self.model.optimizer, 'learning_rate'):
-                keras.backend.set_value(self.model.optimizer.learning_rate, lr)
+            lr_attr = getattr(self.model.optimizer, "learning_rate", None)
+            if hasattr(lr_attr, "assign"):
+                lr_attr.assign(lr)
             else:
-                keras.backend.set_value(self.model.optimizer.lr, lr)
+                keras.backend.set_value(self.model.optimizer.learning_rate, lr)
             logger.debug(f"Epoch {epoch}: Learning rate warmed up to {lr:.6f}")
