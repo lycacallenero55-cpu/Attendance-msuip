@@ -220,8 +220,13 @@ class SignatureVerificationModel:
             elif arr.shape[-1] == 4:
                 arr = arr[..., :3]
             
-            # FIXED: Ensure float32 dtype
-            arr = arr.astype(np.float32)
+            # FIXED: Ensure float32 dtype and proper range [0, 255]
+            if arr.dtype != np.float32:
+                arr = arr.astype(np.float32)
+            
+            # Ensure values are in [0, 255] range
+            if arr.max() <= 1.0:
+                arr = arr * 255.0
             
             # Preprocess
             arr = tf.convert_to_tensor(arr, dtype=tf.float32)
@@ -239,13 +244,26 @@ class SignatureVerificationModel:
         # Convert PIL images to numpy arrays with consistent dtype and 3 channels
         img_arrays = []
         for img in all_images:
-            arr = np.array(img, dtype=np.uint8)
+            # Handle both PIL and numpy arrays
+            if hasattr(img, 'convert'):  # PIL Image
+                arr = np.array(img.convert('RGB'))
+            else:
+                arr = img
+            
+            # Ensure correct shape
             if arr.ndim == 2:
                 arr = np.stack([arr, arr, arr], axis=-1)
-            if arr.shape[-1] == 4:
+            elif arr.shape[-1] == 4:
                 arr = arr[..., :3]
-            # Ensure consistent shape and dtype
-            arr = arr.astype(np.float32)
+            
+            # FIXED: Ensure float32 dtype and proper range [0, 255]
+            if arr.dtype != np.float32:
+                arr = arr.astype(np.float32)
+            
+            # Ensure values are in [0, 255] range
+            if arr.max() <= 1.0:
+                arr = arr * 255.0
+            
             img_arrays.append(arr)
     
         images = np.stack(img_arrays, axis=0)
@@ -377,12 +395,19 @@ class SignatureVerificationModel:
             else:
                 arr = img
             
-            # FIXED: Ensure correct dtype
+            # Ensure correct shape
             if arr.ndim == 2:
                 arr = np.stack([arr, arr, arr], axis=-1)
+            elif arr.shape[-1] == 4:
+                arr = arr[..., :3]
             
-            # FIXED: Use float32 throughout
-            arr = arr.astype(np.float32)
+            # FIXED: Ensure float32 dtype and proper range [0, 255]
+            if arr.dtype != np.float32:
+                arr = arr.astype(np.float32)
+            
+            # Ensure values are in [0, 255] range
+            if arr.max() <= 1.0:
+                arr = arr * 255.0
             
             arr = tf.image.resize(arr, [self.image_size, self.image_size])
             arr = tf.cast(arr, tf.float32)

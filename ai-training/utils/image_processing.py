@@ -95,7 +95,11 @@ def preprocess_image(image: Image.Image, target_size: int) -> Image.Image:
         # 6) Resize to target and convert to RGB
         out = cv2.resize(canvas, (target_size, target_size), interpolation=cv2.INTER_AREA)
         out_pil = Image.fromarray(out).convert('RGB')
-        return out_pil
+        
+        # FIXED: Ensure consistent dtype for downstream processing
+        # Convert to numpy array with float32 dtype in [0, 255] range
+        out_array = np.array(out_pil, dtype=np.float32)
+        return out_array
 
     except Exception as e:
         logger.error(f"Image preprocessing failed: {e}")
