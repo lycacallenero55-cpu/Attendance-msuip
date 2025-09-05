@@ -79,8 +79,17 @@ async def verify_signature(
         # Prefer embedding-only artifact if present (no Lambda)
         embed_path_remote = model.get("embedding_model_path")
         if embed_path_remote:
-            embed_local = await download_from_supabase(embed_path_remote)
-            model_manager.embedding_model = keras.models.load_model(embed_local, safe_mode=False)
+            try:
+                embed_local = await download_from_supabase(embed_path_remote)
+                model_manager.embedding_model = keras.models.load_model(embed_local, safe_mode=False)
+            except Exception as e:
+                logger.warning(f"Could not load embedding model for model {model.get('id')}: {e}")
+                # Fallback to full model
+                model_path = await download_from_supabase(model["model_path"])
+                try:
+                    model_manager.load_model(model_path)
+                except Exception as e2:
+                    raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
         else:
             model_path = await download_from_supabase(model["model_path"])
             try:
@@ -209,11 +218,25 @@ async def identify_signature_owner(
                 model_manager = SignatureVerificationModel()
                 embed_path_remote = model.get("embedding_model_path")
                 if embed_path_remote:
-                    embed_local = await download_from_supabase(embed_path_remote)
-                    model_manager.embedding_model = keras.models.load_model(embed_local, safe_mode=False)
+                    try:
+                        embed_local = await download_from_supabase(embed_path_remote)
+                        model_manager.embedding_model = keras.models.load_model(embed_local, safe_mode=False)
+                    except Exception as e:
+                        logger.warning(f"Could not load embedding model for model {model.get('id')}: {e}")
+                        # Fallback to full model
+                        model_path = await download_from_supabase(model["model_path"])
+                        try:
+                            model_manager.load_model(model_path)
+                        except Exception as e2:
+                            logger.error(f"Could not load full model for model {model.get('id')}: {e2}")
+                            continue
                 else:
                     model_path = await download_from_supabase(model["model_path"])
-                    model_manager.load_model(model_path)
+                    try:
+                        model_manager.load_model(model_path)
+                    except Exception as e:
+                        logger.warning(f"Could not load model {model.get('id')}: {e}")
+                        continue
 
                 # Embed with TTA
                 def embed_pil(img_pil: Image.Image):
