@@ -78,24 +78,31 @@ async def start_training(
             processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
             forged_images.append(processed_image)
         
-        # Apply data augmentation to increase training robustness
-        logger.info(f"Applying data augmentation to {len(genuine_images)} genuine and {len(forged_images)} forged samples")
+        # Apply MUCH MORE AGGRESSIVE data augmentation to prevent overfitting
+        logger.info(f"Applying aggressive data augmentation to {len(genuine_images)} genuine and {len(forged_images)} forged samples")
         augmenter = SignatureAugmentation(
-            rotation_range=15.0,
-            scale_range=(0.9, 1.1),
-            brightness_range=0.2,
-            blur_probability=0.3,
-            thickness_variation=0.1
+            rotation_range=30.0,  # Increased from 15.0
+            scale_range=(0.7, 1.4),  # Increased from (0.9, 1.1)
+            brightness_range=0.5,  # Increased from 0.2
+            blur_probability=0.6,  # Increased from 0.3
+            thickness_variation=0.2,  # Increased from 0.1
+            elastic_alpha=15.0,  # Increased for more distortion
+            elastic_sigma=8.0,  # Increased for smoother distortions
+            noise_stddev=15.0,  # Increased for more noise
+            shear_range=0.4,  # Increased for more perspective distortion
+            perspective_distortion=0.08,  # Increased for camera angle simulation
+            camera_tilt_range=20.0,  # Increased for real-world camera tilt
+            lighting_angle_range=45.0  # Increased for lighting variations
         )
         
-        # Augment genuine signatures more aggressively (3x augmentation)
+        # Augment genuine signatures MUCH more aggressively (5x augmentation instead of 3x)
         genuine_augmented, genuine_labels = augmenter.augment_batch(
-            genuine_images, [True] * len(genuine_images), augmentation_factor=3
+            genuine_images, [True] * len(genuine_images), augmentation_factor=5
         )
         
-        # Augment forged signatures less aggressively (1x augmentation)
+        # Augment forged signatures more aggressively too (3x augmentation instead of 1x)
         forged_augmented, forged_labels = augmenter.augment_batch(
-            forged_images, [False] * len(forged_images), augmentation_factor=1
+            forged_images, [False] * len(forged_images), augmentation_factor=3
         )
         
         # Combine all augmented data
@@ -361,22 +368,29 @@ async def run_async_training(job, student, genuine_data, forged_data):
             progress = 20.0 + (i + 1) / len(forged_data) * 15.0
             job_queue.update_job_progress(job.job_id, progress, f"Processing forged images... {i+1}/{len(forged_data)}")
         
-        # Apply data augmentation
-        job_queue.update_job_progress(job.job_id, 35.0, "Applying data augmentation...")
+        # Apply MUCH MORE AGGRESSIVE data augmentation to prevent overfitting
+        job_queue.update_job_progress(job.job_id, 35.0, "Applying aggressive data augmentation...")
         augmenter = SignatureAugmentation(
-            rotation_range=15.0,
-            scale_range=(0.9, 1.1),
-            brightness_range=0.2,
-            blur_probability=0.3,
-            thickness_variation=0.1
+            rotation_range=30.0,  # Increased from 15.0
+            scale_range=(0.7, 1.4),  # Increased from (0.9, 1.1)
+            brightness_range=0.5,  # Increased from 0.2
+            blur_probability=0.6,  # Increased from 0.3
+            thickness_variation=0.2,  # Increased from 0.1
+            elastic_alpha=15.0,  # Increased for more distortion
+            elastic_sigma=8.0,  # Increased for smoother distortions
+            noise_stddev=15.0,  # Increased for more noise
+            shear_range=0.4,  # Increased for more perspective distortion
+            perspective_distortion=0.08,  # Increased for camera angle simulation
+            camera_tilt_range=20.0,  # Increased for real-world camera tilt
+            lighting_angle_range=45.0  # Increased for lighting variations
         )
         
         genuine_augmented, genuine_labels = augmenter.augment_batch(
-            genuine_images, [True] * len(genuine_images), augmentation_factor=3
+            genuine_images, [True] * len(genuine_images), augmentation_factor=5
         )
         
         forged_augmented, forged_labels = augmenter.augment_batch(
-            forged_images, [False] * len(forged_images), augmentation_factor=1
+            forged_images, [False] * len(forged_images), augmentation_factor=3
         )
         
         all_images = genuine_augmented + forged_augmented

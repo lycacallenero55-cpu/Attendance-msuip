@@ -58,11 +58,11 @@ class SignatureVerificationModel:
             # Deeper feature extraction with residual connections
             y1 = layers.Dense(512, activation='relu')(y)
             y1 = layers.BatchNormalization()(y1)
-            y1 = layers.Dropout(0.4)(y1)
+            y1 = layers.Dropout(0.6)(y1)  # Increased from 0.4
             
             y2 = layers.Dense(256, activation='relu')(y1)
             y2 = layers.BatchNormalization()(y2)
-            y2 = layers.Dropout(0.3)(y2)
+            y2 = layers.Dropout(0.5)(y2)  # Increased from 0.3
             
             # Residual connection
             y1_proj = layers.Dense(256, activation='linear')(y1)
@@ -88,22 +88,23 @@ class SignatureVerificationModel:
         # This avoids Lambda layers that cause serialization issues
         merged = layers.Concatenate()([embedding_a, embedding_b])
         
-        # Enhanced classification head
+        # Enhanced classification head with more regularization
         output = layers.Dense(256, activation='relu')(merged)
         output = layers.BatchNormalization()(output)
-        output = layers.Dropout(0.4)(output)
+        output = layers.Dropout(0.6)(output)  # Increased from 0.4
         output = layers.Dense(128, activation='relu')(output)
         output = layers.BatchNormalization()(output)
-        output = layers.Dropout(0.3)(output)
+        output = layers.Dropout(0.5)(output)  # Increased from 0.3
         output = layers.Dense(64, activation='relu')(output)
-        output = layers.Dropout(0.2)(output)
+        output = layers.Dropout(0.4)(output)  # Increased from 0.2
         output = layers.Dense(1, activation='sigmoid', name='similarity_score')(output)
         
         # Create the model
         model = keras.Model(inputs=[input_a, input_b], outputs=output, name='signature_verification')
         
         # Use simple Adam optimizer
-        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate)
+        # Compile model with weight decay for regularization
+        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, weight_decay=1e-4)
         
         # Custom metrics including AUC-ROC and AUC-PR
         model.compile(

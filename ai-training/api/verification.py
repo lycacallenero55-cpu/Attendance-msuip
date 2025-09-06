@@ -126,13 +126,7 @@ async def verify_signature(
             raise HTTPException(status_code=400, detail="Prototype not available for this model")
 
         dist = float(np.linalg.norm(test_embedding - centroid))
-        
-        # TEMPORARY DEBUG: Make threshold more conservative to test if this fixes the issue
-        # If this works, then the threshold computation is the problem
-        conservative_threshold = threshold * 0.5  # Make threshold 50% more strict
-        
-        is_genuine = dist <= conservative_threshold
-        logger.info(f"Using conservative threshold: {conservative_threshold:.4f} (original: {threshold:.4f})")
+        is_genuine = dist <= threshold
         denom = threshold if threshold and threshold > 1e-6 else 1.0
         raw_score = 1.0 - dist / denom
         score = float(max(0.0, min(1.0, raw_score)))
@@ -271,14 +265,10 @@ async def identify_signature_owner(
                     threshold = 0.7
 
                 dist = float(np.linalg.norm(test_embedding - centroid))
-                
-                # TEMPORARY DEBUG: Use same conservative threshold for identify endpoint
-                conservative_threshold = threshold * 0.5
-                
-                denom = conservative_threshold if conservative_threshold and conservative_threshold > 1e-6 else 1.0
+                denom = threshold if threshold and threshold > 1e-6 else 1.0
                 raw_score = 1.0 - dist / denom
                 score = float(max(0.0, min(1.0, raw_score)))
-                is_match = dist <= conservative_threshold
+                is_match = dist <= threshold
 
                 if score > best_score:
                     best_score = score
