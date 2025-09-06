@@ -170,6 +170,13 @@ class SignatureVerificationModel:
             # Use statistical approach if no forged samples
             genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
             threshold = float(np.percentile(genuine_dists, 95) * 1.2)
+            
+            # Ensure statistical threshold is also reasonable
+            min_threshold = 0.3
+            if threshold < min_threshold:
+                logger.warning(f"Statistical threshold {threshold:.4f} is too low, using minimum threshold {min_threshold}")
+                threshold = min_threshold
+            
             logger.info(f"Computed statistical threshold: {threshold:.4f}")
         
         return centroid.tolist(), threshold
@@ -180,6 +187,14 @@ class SignatureVerificationModel:
         
         logger.info(f"EER computation - Genuine distances: mean={np.mean(genuine_dists):.4f}, std={np.std(genuine_dists):.4f}")
         logger.info(f"EER computation - Forged distances: mean={np.mean(forged_dists):.4f}, std={np.std(forged_dists):.4f}")
+        
+        # Check if genuine and forged are too similar (problematic case)
+        genuine_mean = np.mean(genuine_dists)
+        forged_mean = np.mean(forged_dists)
+        if abs(genuine_mean - forged_mean) < 0.1:
+            logger.warning(f"Genuine and forged signatures are too similar in embedding space!")
+            logger.warning(f"Genuine mean distance: {genuine_mean:.4f}, Forged mean distance: {forged_mean:.4f}")
+            logger.warning("This suggests the model is not learning to distinguish between genuine and forged signatures")
         
         best_threshold = 0.5
         best_eer = 1.0
@@ -203,6 +218,13 @@ class SignatureVerificationModel:
         
         # Add safety margin (10% buffer)
         final_threshold = float(best_threshold * 1.1)
+        
+        # Ensure threshold is reasonable - minimum of 0.3 to prevent overly permissive matching
+        min_threshold = 0.3
+        if final_threshold < min_threshold:
+            logger.warning(f"EER threshold {final_threshold:.4f} is too low, using minimum threshold {min_threshold}")
+            final_threshold = min_threshold
+        
         logger.info(f"EER computation - Final threshold with margin: {final_threshold:.4f}")
         
         return final_threshold
