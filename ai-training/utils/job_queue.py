@@ -32,6 +32,23 @@ class TrainingJob:
         self.error = None
         self.created_at = datetime.utcnow()
         
+        # Training metrics for real-time display
+        self.training_metrics = {
+            "current_epoch": 0,
+            "total_epochs": 0,
+            "accuracy": 0.0,
+            "val_accuracy": 0.0,
+            "loss": 0.0,
+            "val_loss": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "auc": 0.0,
+            "val_auc": 0.0,
+            "learning_rate": 0.0,
+            "batch_progress": "",
+            "epoch_progress": ""
+        }
+        
     def to_dict(self) -> Dict[str, Any]:
         """Convert job to dictionary for API responses."""
         return {
@@ -46,7 +63,8 @@ class TrainingJob:
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "result": self.result,
             "error": self.error,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
+            "training_metrics": self.training_metrics
         }
 
 class JobQueue:
@@ -70,13 +88,15 @@ class JobQueue:
         return self.jobs.get(job_id)
     
     def update_job_progress(self, job_id: str, progress: float, stage: str, 
-                          estimated_time: Optional[int] = None):
+                          estimated_time: Optional[int] = None, training_metrics: Optional[Dict] = None):
         """Update job progress."""
         job = self.jobs.get(job_id)
         if job:
             job.progress = min(100.0, max(0.0, progress))
             job.current_stage = stage
             job.estimated_time_remaining = estimated_time
+            if training_metrics:
+                job.training_metrics.update(training_metrics)
             self._notify_subscribers(job)
             logger.debug(f"Job {job_id} progress: {progress:.1f}% - {stage}")
     

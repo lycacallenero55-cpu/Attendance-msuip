@@ -12,16 +12,18 @@ class SignatureAugmentation:
     """Enhanced augmentation pipeline for better generalization"""
     
     def __init__(self, 
-                 rotation_range: float = 15.0,
-                 scale_range: Tuple[float, float] = (0.9, 1.1),
-                 brightness_range: float = 0.2,
-                 blur_probability: float = 0.3,
-                 thickness_variation: float = 0.1,
-                 elastic_alpha: float = 8.0,
-                 elastic_sigma: float = 4.0,
-                 noise_stddev: float = 6.0,
-                 shear_range: float = 0.2,
-                 perspective_distortion: float = 0.02):
+                 rotation_range: float = 25.0,  # Increased for real-world camera tilt
+                 scale_range: Tuple[float, float] = (0.7, 1.3),  # Wider range for zoom variations
+                 brightness_range: float = 0.4,  # Increased for lighting variations
+                 blur_probability: float = 0.5,  # Increased for camera blur
+                 thickness_variation: float = 0.15,  # Increased for pen pressure
+                 elastic_alpha: float = 12.0,  # Increased for natural variations
+                 elastic_sigma: float = 6.0,  # Increased for smoother distortions
+                 noise_stddev: float = 10.0,  # Increased for camera noise
+                 shear_range: float = 0.3,  # Increased for perspective distortion
+                 perspective_distortion: float = 0.05,  # Increased for camera angle
+                 camera_tilt_range: float = 15.0,  # New: simulate camera tilt
+                 lighting_angle_range: float = 30.0):  # New: simulate lighting direction
         
         self.rotation_range = rotation_range
         self.scale_range = scale_range
@@ -33,6 +35,8 @@ class SignatureAugmentation:
         self.noise_stddev = noise_stddev
         self.shear_range = shear_range
         self.perspective_distortion = perspective_distortion
+        self.camera_tilt_range = camera_tilt_range
+        self.lighting_angle_range = lighting_angle_range
         
         # Progressive difficulty settings
         self.difficulty_levels = {
@@ -59,6 +63,8 @@ class SignatureAugmentation:
                 (0.5 * difficulty_mult, self._apply_thickness_variation),
                 (0.4 * difficulty_mult, self._apply_shear),
                 (0.4 * difficulty_mult, self._apply_perspective),
+                (0.3 * difficulty_mult, self._apply_camera_tilt),  # New: camera tilt simulation
+                (0.3 * difficulty_mult, self._apply_lighting_direction),  # New: lighting simulation
                 (self.blur_probability * difficulty_mult, self._apply_blur),
                 (0.3 * difficulty_mult, self._apply_noise),
                 (0.2 * difficulty_mult, self._apply_pen_pressure_variation),
@@ -396,3 +402,82 @@ class SignatureAugmentation:
         """Apply mild brightness adjustment"""
         factor = random.uniform(0.95, 1.05)
         return np.clip(image * factor, 0, 255).astype(np.uint8)
+    
+    def _apply_camera_tilt(self, image: np.ndarray) -> np.ndarray:
+        """Simulate camera tilt by applying 3D rotation"""
+        h, w = image.shape[:2]
+        
+        # Random tilt angles
+        tilt_x = random.uniform(-self.camera_tilt_range, self.camera_tilt_range)
+        tilt_y = random.uniform(-self.camera_tilt_range * 0.5, self.camera_tilt_range * 0.5)
+        
+        # Convert to radians
+        tilt_x_rad = np.radians(tilt_x)
+        tilt_y_rad = np.radians(tilt_y)
+        
+        # Create 3D rotation matrices
+        cos_x, sin_x = np.cos(tilt_x_rad), np.sin(tilt_x_rad)
+        cos_y, sin_y = np.cos(tilt_y_rad), np.sin(tilt_y_rad)
+        
+        # Apply perspective transformation to simulate 3D rotation
+        # This creates a more realistic camera tilt effect
+        src_points = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
+        
+        # Calculate perspective distortion based on tilt
+        perspective_factor = 0.1
+        dst_points = np.float32([
+            [w * perspective_factor * sin_x, h * perspective_factor * sin_y],
+            [w * (1 - perspective_factor * sin_x), h * perspective_factor * sin_y],
+            [w * (1 - perspective_factor * sin_x), h * (1 - perspective_factor * sin_y)],
+            [w * perspective_factor * sin_x, h * (1 - perspective_factor * sin_y)]
+        ])
+        
+        # Apply perspective transformation
+        matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+        return cv2.warpPerspective(image, matrix, (w, h),
+                                 flags=cv2.INTER_LINEAR,
+                                 borderMode=cv2.BORDER_CONSTANT,
+                                 borderValue=255)
+    
+    def _apply_lighting_direction(self, image: np.ndarray) -> np.ndarray:
+        """Simulate different lighting directions and shadows"""
+        h, w = image.shape[:2]
+        
+        # Random lighting angle
+        light_angle = random.uniform(0, self.lighting_angle_range)
+        light_intensity = random.uniform(0.3, 0.8)
+        
+        # Create gradient mask for lighting effect
+        center_x, center_y = w // 2, h // 2
+        
+        # Create coordinate grids
+        y, x = np.ogrid[:h, :w]
+        
+        # Calculate distance from light source
+        light_x = center_x + np.cos(np.radians(light_angle)) * w * 0.3
+        light_y = center_y + np.sin(np.radians(light_angle)) * h * 0.3
+        
+        # Distance-based lighting falloff
+        distance = np.sqrt((x - light_x)**2 + (y - light_y)**2)
+        max_distance = np.sqrt(w**2 + h**2) / 2
+        
+        # Create lighting mask (brighter closer to light source)
+        lighting_mask = 1.0 - (distance / max_distance) * light_intensity
+        lighting_mask = np.clip(lighting_mask, 0.2, 1.0)
+        
+        # Apply lighting effect
+        result = image.astype(np.float32)
+        result = result * lighting_mask
+        
+        # Add subtle shadow on opposite side
+        shadow_angle = light_angle + 180
+        shadow_x = center_x + np.cos(np.radians(shadow_angle)) * w * 0.2
+        shadow_y = center_y + np.sin(np.radians(shadow_angle)) * h * 0.2
+        
+        shadow_distance = np.sqrt((x - shadow_x)**2 + (y - shadow_y)**2)
+        shadow_mask = 1.0 - np.exp(-shadow_distance / (max_distance * 0.3)) * 0.3
+        shadow_mask = np.clip(shadow_mask, 0.7, 1.0)
+        
+        result = result * shadow_mask
+        
+        return np.clip(result, 0, 255).astype(np.uint8)

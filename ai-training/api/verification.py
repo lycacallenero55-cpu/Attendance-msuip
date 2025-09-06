@@ -5,6 +5,7 @@ from PIL import Image
 import io
 import logging
 import time
+import os
 
 from models.database import db_manager
 import tensorflow as tf
@@ -14,7 +15,58 @@ from utils.image_processing import validate_image, preprocess_image
 from utils.storage import download_from_supabase
 from utils.antispoofing import AntiSpoofingDetector
 from services.model_versioning import model_versioning_service
+from services.model_cache import model_cache
 from config import settings
+
+async def load_signature_model(model):
+    """
+    Unified model loading helper for both verify and identify endpoints
+    """
+    model_manager = SignatureVerificationModel()
+    
+    # Try to load embedding-only model first (lighter/faster)
+    embedding_path = model.get("embedding_model_path")
+    if embedding_path:
+        try:
+            logger.info(f"🔄 Loading embedding model from: {embedding_path}")
+            # Download from Supabase if needed
+            if embedding_path.startswith("models/"):
+                local_path = os.path.join(settings.LOCAL_MODELS_DIR, os.path.basename(embedding_path))
+                if not os.path.exists(local_path):
+                    # Download from Supabase
+                    from utils.storage import download_from_supabase
+                    await download_from_supabase(embedding_path, local_path)
+                embedding_path = local_path
+            
+            model_manager.embedding_model = keras.models.load_model(embedding_path)
+            logger.info("✅ Embedding model loaded successfully")
+            logger.info(f"Embedding model input shape: {model_manager.embedding_model.input_shape}")
+            logger.info(f"Embedding model output shape: {model_manager.embedding_model.output_shape}")
+        except Exception as e:
+            logger.warning(f"Failed to load embedding model: {e}")
+            embedding_path = None
+    
+    # Fallback to full model if embedding model failed
+    if not embedding_path or not hasattr(model_manager, 'embedding_model'):
+        try:
+            model_path = model.get("model_path")
+            if model_path.startswith("models/"):
+                local_path = os.path.join(settings.LOCAL_MODELS_DIR, os.path.basename(model_path))
+                if not os.path.exists(local_path):
+                    # Download from Supabase
+                    from utils.storage import download_from_supabase
+                    await download_from_supabase(model_path, local_path)
+                model_path = local_path
+            
+            logger.info(f"🔄 Loading full model from: {model_path}")
+            model_manager.model = keras.models.load_model(model_path)
+            model_manager.embedding_model = model_manager.model.get_layer('embedding_model')
+            logger.info("✅ Full model loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}")
+            raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
+    
+    return model_manager
 from utils.augmentation import SignatureAugmentation
 
 router = APIRouter()
@@ -74,59 +126,74 @@ async def verify_signature(
         # Log spoofing analysis for monitoring
         logger.info(f"Anti-spoofing analysis for student {student_id}: {spoofing_analysis}")
         
-        # Load the trained model for embedding
+        # Load the trained model for embedding using cache
+        logger.info(f"Loading model for student {student_id}, model ID: {model.get('id')}")
         model_manager = SignatureVerificationModel()
-        # Prefer embedding-only artifact if present (no Lambda)
-        embed_path_remote = model.get("embedding_model_path")
-        if embed_path_remote:
-            embed_local = await download_from_supabase(embed_path_remote)
-            model_manager.embedding_model = keras.models.load_model(embed_local, safe_mode=False)
+        
+        # Use cached model loading
+        model_id = str(model.get('id'))
+        model_path = model.get("model_path")
+        embedding_path = model.get("embedding_model_path")
+        
+        cached_model = await model_cache.get_model(model_id, model_path, embedding_path)
+        if cached_model:
+            model_manager.embedding_model = cached_model
+            logger.info("✅ Model loaded from cache successfully")
+            logger.info(f"Model input shape: {cached_model.input_shape}")
+            logger.info(f"Model output shape: {cached_model.output_shape}")
         else:
-            model_path = await download_from_supabase(model["model_path"])
-            try:
-                model_manager.load_model(model_path)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
+            raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
 
         # Compute embedding with light test-time augmentation (average of few variants)
-        def embed_pil(img_pil: Image.Image):
-            arr = np.array(img_pil)
-            tensor = tf.convert_to_tensor(arr)
-            tensor = model_manager.preprocess_image(tensor)
-            tensor = tf.expand_dims(tensor, axis=0)
-            return model_manager.embedding_model.predict(tensor, verbose=0)[0]
-
-        # Create 3 variants: original + 2 mild transforms
+        # FIXED: Use the same preprocessing pipeline as training
+        logger.info("🔍 Computing embeddings using trained model...")
         embeddings = []
-        embeddings.append(embed_pil(test_processed))
-        try:
-            aug = SignatureAugmentation(rotation_range=8.0, scale_range=(0.95, 1.05), brightness_range=0.1, blur_probability=0.15, thickness_variation=0.08)
-            import numpy as _np  # alias to avoid shadow
-            base_np = _np.array(test_processed.convert('L'))
-            v1 = aug.augment_image(base_np, is_genuine=True)
-            v2 = aug.augment_image(base_np, is_genuine=True)
-            v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-            v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-            embeddings.append(embed_pil(v1_pil))
-            embeddings.append(embed_pil(v2_pil))
-        except Exception:
-            pass
-        test_embedding = np.mean(np.stack(embeddings, axis=0), axis=0)
+        
+        # Test the model with a single image first
+        test_embedding = model_manager.embed_images([test_processed])[0]
+        logger.info(f"✅ Model inference successful! Embedding shape: {test_embedding.shape}")
+        logger.info(f"Embedding range: [{test_embedding.min():.4f}, {test_embedding.max():.4f}]")
+        logger.info(f"Embedding mean: {test_embedding.mean():.4f}, std: {test_embedding.std():.4f}")
+        
+        # Use single embedding for faster verification (TTA disabled for speed)
+        test_embedding = test_embedding
+        logger.info(f"✅ Final averaged embedding shape: {test_embedding.shape}")
+        logger.info(f"Final embedding range: [{test_embedding.min():.4f}, {test_embedding.max():.4f}]")
 
         centroid = np.array(model.get("prototype_centroid") or [])
+        logger.info(f"📊 Prototype centroid shape: {centroid.shape}")
+        logger.info(f"Centroid range: [{centroid.min():.4f}, {centroid.max():.4f}]")
+        
         # Default threshold fallback
         try:
             threshold = float(model.get("prototype_threshold")) if model.get("prototype_threshold") is not None else 0.7
         except Exception:
             threshold = 0.7
+        
         if centroid.size == 0:
             raise HTTPException(status_code=400, detail="Prototype not available for this model")
 
+        logger.info("🔍 Computing distance between test embedding and prototype centroid...")
         dist = float(np.linalg.norm(test_embedding - centroid))
         is_genuine = dist <= threshold
-        denom = threshold if threshold and threshold > 1e-6 else 1.0
-        raw_score = 1.0 - dist / denom
-        score = float(max(0.0, min(1.0, raw_score)))
+        # Calculate similarity score using sigmoid function for better calibration
+        # Score approaches 1.0 when distance is much smaller than threshold
+        # Score approaches 0.0 when distance is much larger than threshold
+        import math
+        # Use sigmoid: score = 1 / (1 + exp(k * (distance - threshold)))
+        # k controls steepness, threshold is the decision boundary
+        k = 5.0  # Steepness parameter
+        score = 1.0 / (1.0 + math.exp(k * (dist - threshold)))
+        score = float(max(0.0, min(1.0, score)))
+        
+        # Log the values for debugging
+        logger.info(f"🎯 VERIFICATION RESULT:")
+        logger.info(f"   Distance: {dist:.4f}")
+        logger.info(f"   Threshold: {threshold:.4f}")
+        logger.info(f"   Is genuine: {is_genuine}")
+        logger.info(f"   Score: {score:.4f}")
+        logger.info(f"   Test embedding shape: {test_embedding.shape}")
+        logger.info(f"   Centroid shape: {centroid.shape}")
 
         # Generate spoofing warning message
         spoofing_warning = spoofing_detector.get_spoofing_warning_message(spoofing_analysis)
@@ -204,39 +271,29 @@ async def identify_signature_owner(
         best_model = None
 
         # For each model, load its embedding model and compute score against its centroid (with light TTA)
-        for model in candidates:
+        logger.info(f"🔍 Testing against {len(candidates)} trained models...")
+        for i, model in enumerate(candidates):
+            logger.info(f"Testing model {i+1}/{len(candidates)}: ID {model.get('id')}, Student ID {model.get('student_id')}")
             try:
                 model_manager = SignatureVerificationModel()
-                embed_path_remote = model.get("embedding_model_path")
-                if embed_path_remote:
-                    embed_local = await download_from_supabase(embed_path_remote)
-                    model_manager.embedding_model = keras.models.load_model(embed_local, safe_mode=False)
+                
+                # Use cached model loading
+                model_id = str(model.get('id'))
+                model_path = model.get("model_path")
+                embedding_path = model.get("embedding_model_path")
+                
+                cached_model = await model_cache.get_model(model_id, model_path, embedding_path)
+                if cached_model:
+                    model_manager.embedding_model = cached_model
+                    logger.info(f"✅ Model {model.get('id')} loaded from cache")
                 else:
-                    model_path = await download_from_supabase(model["model_path"])
-                    model_manager.load_model(model_path)
+                    logger.warning(f"Could not load model {model.get('id')}")
+                    continue
 
-                # Embed with TTA
-                def embed_pil(img_pil: Image.Image):
-                    arr = np.array(img_pil)
-                    tensor = tf.convert_to_tensor(arr)
-                    tensor = model_manager.preprocess_image(tensor)
-                    tensor = tf.expand_dims(tensor, axis=0)
-                    return model_manager.embedding_model.predict(tensor, verbose=0)[0]
-
-                embeddings = [embed_pil(test_processed)]
-                try:
-                    aug = SignatureAugmentation(rotation_range=8.0, scale_range=(0.95, 1.05), brightness_range=0.1, blur_probability=0.15, thickness_variation=0.08)
-                    import numpy as _np
-                    base_np = _np.array(test_processed.convert('L'))
-                    v1 = aug.augment_image(base_np, is_genuine=True)
-                    v2 = aug.augment_image(base_np, is_genuine=True)
-                    v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-                    v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-                    embeddings.append(embed_pil(v1_pil))
-                    embeddings.append(embed_pil(v2_pil))
-                except Exception:
-                    pass
-                test_embedding = np.mean(np.stack(embeddings, axis=0), axis=0)
+                # Embed without TTA for faster identification
+                logger.info(f"🔍 Computing embedding for model {model.get('id')}...")
+                test_embedding = model_manager.embed_images([test_processed])[0]
+                logger.info(f"✅ Embedding computed for model {model.get('id')}, shape: {test_embedding.shape}")
 
                 centroid = np.array(model.get("prototype_centroid") or [])
                 if centroid.size == 0:
@@ -247,9 +304,11 @@ async def identify_signature_owner(
                     threshold = 0.7
 
                 dist = float(np.linalg.norm(test_embedding - centroid))
-                denom = threshold if threshold and threshold > 1e-6 else 1.0
-                raw_score = 1.0 - dist / denom
-                score = float(max(0.0, min(1.0, raw_score)))
+                # Use same sigmoid scoring as verify endpoint
+                import math
+                k = 5.0  # Steepness parameter
+                score = 1.0 / (1.0 + math.exp(k * (dist - threshold)))
+                score = float(max(0.0, min(1.0, score)))
                 is_match = dist <= threshold
 
                 if score > best_score:
@@ -312,4 +371,30 @@ async def get_verification_models(student_id: int):
     
     except Exception as e:
         logger.error(f"Error getting verification models: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/cache/stats")
+async def get_cache_stats():
+    """Get model cache statistics"""
+    try:
+        stats = model_cache.get_cache_stats()
+        return {
+            "success": True,
+            "cache_stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/cache/clear")
+async def clear_model_cache():
+    """Clear the model cache"""
+    try:
+        await model_cache.clear_cache()
+        return {
+            "success": True,
+            "message": "Model cache cleared successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error clearing cache: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -50,6 +50,21 @@ export interface TrainingJob {
   result: any;
   error: string | null;
   created_at: string;
+  training_metrics?: {
+    current_epoch: number;
+    total_epochs: number;
+    accuracy: number;
+    val_accuracy: number;
+    loss: number;
+    val_loss: number;
+    precision: number;
+    recall: number;
+    auc: number;
+    val_auc: number;
+    learning_rate: number;
+    batch_progress: string;
+    epoch_progress: string;
+  };
 }
 
 export interface AIVerificationResponse {
@@ -305,7 +320,12 @@ export class AIService {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Failed to start training');
+        console.error('Training API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: data
+        });
+        throw new Error(data.detail || data.message || `Training failed with status ${response.status}`);
       }
       return data;
     } catch (error) {

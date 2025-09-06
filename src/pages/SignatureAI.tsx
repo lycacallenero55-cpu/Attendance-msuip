@@ -62,6 +62,19 @@ const SignatureAI = () => {
   const trainingStartTimeRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   
+  // Real-time training logs state
+  const [trainingLogs, setTrainingLogs] = useState<string[]>([]);
+  const [currentEpochProgress, setCurrentEpochProgress] = useState<{
+    epoch: number;
+    totalEpochs: number;
+    batch: number;
+    totalBatches: number;
+    accuracy: number;
+    loss: number;
+    valAccuracy: number;
+    valLoss: number;
+  } | null>(null);
+  
   // Verification Section State
   const [verificationFile, setVerificationFile] = useState<File | null>(null);
   const [verificationPreview, setVerificationPreview] = useState<string>('');
@@ -129,77 +142,81 @@ const SignatureAI = () => {
     return () => document.removeEventListener('click', handleClick);
   }, [hasUnsavedChanges, location.pathname, handleClose]);
 
+  type SerializableStudent = Pick<Student, 'id' | 'student_id' | 'firstname' | 'surname' | 'program' | 'year' | 'section'>;
+  type SerializableTraining = { name: string; type: string; size: number };
 
-type SerializableStudent = Pick<Student, 'id' | 'student_id' | 'firstname' | 'surname' | 'program' | 'year' | 'section'>;
-type SerializableTraining = { name: string; type: string; size: number };
+  // No longer serializing file contents to avoid storage quota issues
 
-// No longer serializing file contents to avoid storage quota issues
+  // No deserialization from data URLs
 
-// No deserialization from data URLs
-
-const saveSessionState = async (extra?: { addGenuine?: File[]; addForged?: File[] }) => {
-  try {
-    // Prepare serializable lists. Append newly added files efficiently.
-    const genuineSerial: SerializableTraining[] = [];
-    for (const item of genuineFiles) {
-      genuineSerial.push({
-        name: item.file.name,
-        type: item.file.type,
-        size: item.file.size,
-      });
+  const saveSessionState = async (extra?: { addGenuine?: File[]; addForged?: File[] }) => {
+    try {
+      // Prepare serializable lists. Append newly added files efficiently.
+      const genuineSerial: SerializableTraining[] = [];
+      for (const item of genuineFiles) {
+        genuineSerial.push({
+          name: item.file.name,
+          type: item.file.type,
+          size: item.file.size,
+        });
+      }
+      const forgedSerial: SerializableTraining[] = [];
+      for (const item of forgedFiles) {
+        forgedSerial.push({
+          name: item.file.name,
+          type: item.file.type,
+          size: item.file.size,
+        });
+      }
+      const studentSerial: SerializableStudent | null = selectedStudent
+        ? {
+            id: selectedStudent.id,
+            student_id: selectedStudent.student_id,
+            firstname: selectedStudent.firstname,
+            surname: selectedStudent.surname,
+            program: selectedStudent.program,
+            year: selectedStudent.year,
+            section: selectedStudent.section,
+          }
+        : null;
+      const payload = {
+        selectedStudent: studentSerial,
+        currentTrainingSet,
+        visibleCounts,
+        genuine: genuineSerial,
+        forged: forgedSerial,
+        timestamp: Date.now(), // Add timestamp for debugging
+      };
+      const json = JSON.stringify(payload);
+      if (json.length < 1500000) {
+        sessionStorage.setItem(STORAGE_KEY, json);
+      }
+      // Mark that we're navigating internally (not refreshing)
+      sessionStorage.setItem(NAVIGATION_FLAG, 'true');
+      console.log('State saved successfully', { timestamp: payload.timestamp });
+    } catch (e) {
+      console.warn('Failed saving session state', e);
     }
-    const forgedSerial: SerializableTraining[] = [];
-    for (const item of forgedFiles) {
-      forgedSerial.push({
-        name: item.file.name,
-        type: item.file.type,
-        size: item.file.size,
-      });
-    }
-    const studentSerial: SerializableStudent | null = selectedStudent
-      ? {
-          id: selectedStudent.id,
-          student_id: selectedStudent.student_id,
-          firstname: selectedStudent.firstname,
-          surname: selectedStudent.surname,
-          program: selectedStudent.program,
-          year: selectedStudent.year,
-          section: selectedStudent.section,
-        }
-      : null;
-    const payload = {
-      selectedStudent: studentSerial,
-      currentTrainingSet,
-      visibleCounts,
-      genuine: genuineSerial,
-      forged: forgedSerial,
-      timestamp: Date.now(), // Add timestamp for debugging
-    };
-    const json = JSON.stringify(payload);
-    if (json.length < 1500000) {
-      sessionStorage.setItem(STORAGE_KEY, json);
-    }
-    // Mark that we're navigating internally (not refreshing)
-    sessionStorage.setItem(NAVIGATION_FLAG, 'true');
-    console.log('State saved successfully', { timestamp: payload.timestamp });
-  } catch (e) {
-    console.warn('Failed saving session state', e);
-  }
-};
+  };
 
-const loadSessionState = async () => {
-  try {
-    // Check if we have a navigation flag indicating internal navigation
-    const hasNavigationFlag = sessionStorage.getItem(NAVIGATION_FLAG);
-    
-    // Only clear state on actual browser refresh/restart, preserve for internal navigation
-    if (!hasNavigationFlag && window.performance.navigation && window.performance.navigation.type === 1) {
-      // This is a browser refresh without navigation flag - clear state for fresh start
-      console.log('Page reload detected, clearing saved state');
-      sessionStorage.removeItem(STORAGE_KEY);
-      sessionStorage.removeItem(NAVIGATION_FLAG);
-      return;
-    }
+  const loadSessionState = async () => {
+    try {
+      // Check if we have a navigation flag indicating internal navigation
+      const hasNavigationFlag = sessionStorage.getItem(NAVIGATION_FLAG);
+      
+      // Only clear state on actual browser refresh/restart, preserve for internal navigation
+      if (!hasNavigationFlag && window.performance.navigation && window.performance.navigation.type === 1) {
+        // This is a browser refresh without navigation flag - clear state for fresh start
+        console.log('Page reload detected, clearing saved state');
+        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(NAVIGATION_FLAG);
+        return;
+      }
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        console.log('No saved state found');
+        return;
+      }
       console.log('Loading saved state...');
       const parsed = JSON.parse(raw) as {
         selectedStudent: SerializableStudent | null;
@@ -220,17 +237,7 @@ const loadSessionState = async () => {
       }
       setVisibleCounts(parsed.visibleCounts || { genuine: 60, forged: 60 });
       setCurrentTrainingSet(parsed.currentTrainingSet || 'genuine');
-      // Rehydrate files
-      const newGenuine: TrainingFile[] = parsed.genuine?.map((s) => {
-        const f = dataUrlToFile(s.dataUrl, s.name, s.type);
-        return { file: f, preview: URL.createObjectURL(f) };
-      }) || [];
-      const newForged: TrainingFile[] = parsed.forged?.map((s) => {
-        const f = dataUrlToFile(s.dataUrl, s.name, s.type);
-        return { file: f, preview: URL.createObjectURL(f) };
-      }) || [];
-      setGenuineFiles(newGenuine);
-      setForgedFiles(newForged);
+      // Do not rehydrate file blobs from storage
       
       // Clear navigation flag after successful load
       sessionStorage.removeItem(NAVIGATION_FLAG);
@@ -536,7 +543,12 @@ const loadSessionState = async () => {
     setTrainingStage('preprocessing');
     setEstimatedTimeRemaining('');
     setElapsedMs(0);
+    setTrainingLogs([]);
+    setCurrentEpochProgress(null);
     trainingStartTimeRef.current = Date.now();
+    
+    // Add initial log entry
+    setTrainingLogs(['Training started...']);
     // Close any previous stream
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -552,6 +564,10 @@ const loadSessionState = async () => {
       );
       
       setJobId(asyncResponse.job_id);
+      
+      // Add job created log entry
+      setTrainingLogs(prev => [...prev, `Job created: ${asyncResponse.job_id}`]);
+      
       // Subscribe to real-time progress updates
       const eventSource = aiService.subscribeToJobProgress(
         asyncResponse.job_id,
@@ -559,8 +575,31 @@ const loadSessionState = async () => {
           // Normalize stage
           if (job.current_stage) setTrainingStage(job.current_stage as any);
           setTrainingStatus(job.current_stage || '');
+          
+          // Add stage update log entry
+          if (job.current_stage && job.current_stage !== 'idle') {
+            setTrainingLogs(prev => {
+              const newLogs = [...prev];
+              const stageLog = `Stage: ${job.current_stage} - Progress: ${Math.round(job.progress || 0)}%`;
+              // Only add if it's a new stage or significant progress change
+              if (newLogs.length === 0 || !newLogs[newLogs.length - 1].includes(job.current_stage)) {
+                newLogs.push(stageLog);
+              }
+              return newLogs.slice(-15); // Keep last 15 entries
+            });
+          }
+          
           // Guard progress to be monotonically non-decreasing
-          setTrainingProgress((prev) => Math.max(prev, Math.min(100, Math.max(0, job.progress || 0))));
+          const newProgress = Math.max(0, Math.min(100, job.progress || 0));
+          console.log('Training progress update:', { 
+            jobId: job.job_id, 
+            progress: job.progress, 
+            newProgress, 
+            stage: job.current_stage,
+            metrics: job.training_metrics 
+          });
+          setTrainingProgress((prev) => Math.max(prev, newProgress));
+          
           // ETA
           if (typeof job.estimated_time_remaining === 'number') {
             const minutes = Math.floor(job.estimated_time_remaining / 60);
@@ -568,6 +607,50 @@ const loadSessionState = async () => {
             setEstimatedTimeRemaining(`~${minutes}:${seconds.toString().padStart(2, '0')} remaining`);
           } else {
             setEstimatedTimeRemaining('');
+          }
+          
+          // Update training metrics if available
+          if (job.training_metrics) {
+            // Create real-time training log entry
+            const metrics = job.training_metrics;
+            if (metrics.current_epoch > 0) {
+              // Create log entry with batch info if available
+              let logEntry = `Epoch ${metrics.current_epoch}/${metrics.total_epochs}`;
+              if (metrics.current_batch) {
+                logEntry += ` - Batch ${metrics.current_batch}`;
+              }
+              logEntry += ` - Accuracy: ${(metrics.accuracy * 100).toFixed(1)}% - Loss: ${metrics.loss.toFixed(4)}`;
+              if (metrics.val_accuracy > 0) {
+                logEntry += ` - Val Accuracy: ${(metrics.val_accuracy * 100).toFixed(1)}% - Val Loss: ${metrics.val_loss.toFixed(4)}`;
+              }
+              
+              setTrainingLogs(prev => {
+                const newLogs = [...prev];
+                // Update the last log entry if it's the same epoch and batch, otherwise add new one
+                const lastLogIndex = newLogs.length - 1;
+                const epochBatchKey = `Epoch ${metrics.current_epoch}/${metrics.total_epochs}${metrics.current_batch ? ` - Batch ${metrics.current_batch}` : ''}`;
+                
+                if (lastLogIndex >= 0 && newLogs[lastLogIndex].startsWith(epochBatchKey)) {
+                  newLogs[lastLogIndex] = logEntry;
+                } else {
+                  newLogs.push(logEntry);
+                }
+                // Keep only last 15 log entries for better visibility
+                return newLogs.slice(-15);
+              });
+              
+              // Update current epoch progress
+              setCurrentEpochProgress({
+                epoch: metrics.current_epoch,
+                totalEpochs: metrics.total_epochs,
+                batch: metrics.current_batch || 0,
+                totalBatches: 0,
+                accuracy: metrics.accuracy,
+                loss: metrics.loss,
+                valAccuracy: metrics.val_accuracy || 0,
+                valLoss: metrics.val_loss || 0
+              });
+            }
           }
           // Completion handling
           if (job.status === 'completed') {
@@ -1157,12 +1240,36 @@ const loadSessionState = async () => {
               </Button>
 
               {isTraining && (
-                <div className="space-y-2">
-                  <Progress value={trainingProgress} />
+                <div className="space-y-3">
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Elapsed: {formatDuration(elapsedMs)}</span>
+                    <span>Progress: {Math.round(trainingProgress)}%</span>
                     <span>{estimatedTimeRemaining || ''}</span>
                   </div>
+                  
+                  {/* Real-time Training Logs Display */}
+                  {trainingLogs.length > 0 && (
+                    <div className="bg-gray-900 text-green-400 rounded-lg p-3 font-mono text-xs max-h-64 overflow-y-auto">
+                      <div className="text-green-300 text-sm font-semibold mb-2">Training Progress (Live)</div>
+                      {trainingLogs.map((log, index) => (
+                        <div key={index} className="mb-1">
+                          {log}
+                        </div>
+                      ))}
+                      {currentEpochProgress && (
+                        <div className="mt-2 pt-2 border-t border-gray-700">
+                          <div className="text-yellow-400">
+                            Current: Epoch {currentEpochProgress.epoch}/{currentEpochProgress.totalEpochs}
+                            {currentEpochProgress.batch > 0 && ` - Batch ${currentEpochProgress.batch}`} - 
+                            Acc: {(currentEpochProgress.accuracy * 100).toFixed(1)}% - 
+                            Loss: {currentEpochProgress.loss.toFixed(4)}
+                            {currentEpochProgress.valAccuracy > 0 && (
+                              <> - Val Acc: {(currentEpochProgress.valAccuracy * 100).toFixed(1)}% - Val Loss: {currentEpochProgress.valLoss.toFixed(4)}</>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

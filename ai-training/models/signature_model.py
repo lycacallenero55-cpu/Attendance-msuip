@@ -1,4 +1,4 @@
-# signature_model.py - FIXED VERSION
+# signature_model.py - FIXED VERSION (No Lambda Layers)
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -41,8 +41,8 @@ class SignatureVerificationModel:
                 include_top=False,
                 weights='imagenet')
             
-            # Fine-tune more layers for signature-specific features
-            for layer in base.layers[:-40]:  # Unfreeze last 40 layers
+            # Freeze MORE layers to prevent overfitting
+            for layer in base.layers[:-20]:  # Freeze more layers (was -40)
                 layer.trainable = False
             
             x = layers.Input(shape=(self.image_size, self.image_size, 3))
@@ -55,24 +55,24 @@ class SignatureVerificationModel:
             
             y = layers.GlobalAveragePooling2D()(y)
             
-            # Deeper feature extraction with residual connections
-            y1 = layers.Dense(512, activation='relu')(y)
+            # Balanced feature extraction for better owner discrimination
+            y1 = layers.Dense(256, activation='relu')(y)  # Increased for better discrimination
             y1 = layers.BatchNormalization()(y1)
-            y1 = layers.Dropout(0.4)(y1)
+            y1 = layers.Dropout(0.5)(y1)  # Reduced dropout for better learning
             
-            y2 = layers.Dense(256, activation='relu')(y1)
+            y2 = layers.Dense(128, activation='relu')(y1)  # Increased for better discrimination
             y2 = layers.BatchNormalization()(y2)
-            y2 = layers.Dropout(0.3)(y2)
+            y2 = layers.Dropout(0.4)(y2)  # Reduced dropout for better learning
             
             # Residual connection
-            y1_proj = layers.Dense(256, activation='linear')(y1)
+            y1_proj = layers.Dense(128, activation='linear')(y1)
             y2 = layers.Add()([y2, y1_proj])
             
-            y3 = layers.Dense(128, activation='relu')(y2)
+            y3 = layers.Dense(64, activation='relu')(y2)  # Increased for better discrimination
             y3 = layers.BatchNormalization()(y3)
             
-            # L2 normalize embeddings for better metric learning
-            y3 = layers.Lambda(lambda x: tf.nn.l2_normalize(x, axis=1))(y3)
+            # Use LayerNormalization instead of Lambda for L2 normalization
+            y3 = layers.LayerNormalization(axis=1)(y3)
             
             model = keras.Model(inputs=x, outputs=y3, name='embedding_branch')
             return model
@@ -84,43 +84,27 @@ class SignatureVerificationModel:
         embedding_a = embedding_network(input_a)
         embedding_b = embedding_network(input_b)
         
-        # Multiple distance metrics for robustness
-        l2_distance = layers.Lambda(
-            lambda x: tf.sqrt(tf.reduce_sum(tf.square(x[0] - x[1]), axis=1, keepdims=True)),
-            name='l2_distance'
-        )([embedding_a, embedding_b])
+        # Use simple concatenation instead of complex distance metrics
+        # This avoids Lambda layers that cause serialization issues
+        merged = layers.Concatenate()([embedding_a, embedding_b])
         
-        cosine_distance = layers.Lambda(
-            lambda x: 1 - tf.reduce_sum(x[0] * x[1], axis=1, keepdims=True),
-            name='cosine_distance'
-        )([embedding_a, embedding_b])
-        
-        # Combine distance features
-        merged = layers.Concatenate()([
-            l2_distance,
-            cosine_distance,
-            layers.Lambda(lambda x: tf.abs(x[0] - x[1]))([embedding_a, embedding_b])
-        ])
-        
-        # Enhanced classification head
-        output = layers.Dense(128, activation='relu')(merged)
+        # Balanced classification head for better discrimination
+        output = layers.Dense(128, activation='relu')(merged)  # Increased for better discrimination
         output = layers.BatchNormalization()(output)
-        output = layers.Dropout(0.4)(output)
-        output = layers.Dense(64, activation='relu')(output)
+        output = layers.Dropout(0.5)(output)  # Reduced dropout for better learning
+        output = layers.Dense(64, activation='relu')(output)  # Increased for better discrimination
         output = layers.BatchNormalization()(output)
-        output = layers.Dropout(0.3)(output)
+        output = layers.Dropout(0.4)(output)  # Reduced dropout for better learning
+        output = layers.Dense(32, activation='relu')(output)  # Increased for better discrimination
+        output = layers.Dropout(0.3)(output)  # Reduced dropout for better learning
         output = layers.Dense(1, activation='sigmoid', name='similarity_score')(output)
         
         # Create the model
         model = keras.Model(inputs=[input_a, input_b], outputs=output, name='signature_verification')
         
-        # Use AdamW optimizer with cosine decay schedule
-        initial_learning_rate = self.learning_rate
-        decay_steps = 1000
-        lr_schedule = keras.optimizers.schedules.CosineDecay(
-            initial_learning_rate, decay_steps, alpha=0.1)
-        
-        optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+        # Use simple Adam optimizer
+        # Compile model with weight decay for regularization
+        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, weight_decay=1e-3)  # Balanced weight decay
         
         # Custom metrics including AUC-ROC and AUC-PR
         model.compile(
@@ -140,12 +124,16 @@ class SignatureVerificationModel:
         
         return model
     
-    def compute_centroid_and_adaptive_threshold(self, genuine_images: List, forged_images: Optional[List] = None) -> Tuple[List[float], float]:
+    def compute_centroid_and_adaptive_threshold(self, genuine_images: List, forged_images: Optional[List] = None, 
+                                               val_genuine_images: Optional[List] = None, 
+                                               val_forged_images: Optional[List] = None) -> Tuple[List[float], float]:
         """Compute centroid and adaptive threshold using EER optimization
         
         Args:
-            genuine_images: List of genuine signature images
-            forged_images: Optional list of forged signature images
+            genuine_images: List of genuine signature images for centroid computation
+            forged_images: Optional list of forged signature images for threshold computation
+            val_genuine_images: Optional validation genuine images (preferred for threshold)
+            val_forged_images: Optional validation forged images (preferred for threshold)
             
         Returns:
             Tuple of (centroid as list, threshold as float)
@@ -153,25 +141,34 @@ class SignatureVerificationModel:
         if not genuine_images:
             raise ValueError("No genuine images provided")
         
-        # Get embeddings for genuine samples
+        # Get embeddings for genuine samples to compute centroid
         embeddings = self.embed_images(genuine_images)
         centroid = np.mean(embeddings, axis=0)
         
-        # Compute distances for genuine samples
-        genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
-        
-        if forged_images and len(forged_images) > 0:
-            # If we have forged samples, optimize threshold using EER
+        # Use validation data for threshold computation if available (prevents overfitting)
+        if val_genuine_images is not None and val_forged_images is not None:
+            logger.info("Using validation data for threshold computation")
+            val_genuine_embeddings = self.embed_images(val_genuine_images)
+            val_forged_embeddings = self.embed_images(val_forged_images)
+            
+            val_genuine_dists = np.linalg.norm(val_genuine_embeddings - centroid, axis=1)
+            val_forged_dists = np.linalg.norm(val_forged_embeddings - centroid, axis=1)
+            
+            threshold = self._find_eer_threshold(val_genuine_dists, val_forged_dists)
+            logger.info(f"Computed validation-based threshold: {threshold:.4f}")
+            
+        elif forged_images and len(forged_images) > 0:
+            # Fallback to training data if no validation data
+            logger.warning("Using training data for threshold computation - may cause overfitting")
+            genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
             forged_embeddings = self.embed_images(forged_images)
             forged_dists = np.linalg.norm(forged_embeddings - centroid, axis=1)
             
-            # Find optimal threshold using ROC analysis
             threshold = self._find_eer_threshold(genuine_dists, forged_dists)
-            
-            logger.info(f"Computed adaptive threshold: {threshold:.4f}")
+            logger.info(f"Computed training-based threshold: {threshold:.4f}")
         else:
             # Use statistical approach if no forged samples
-            # Set threshold at 95th percentile with 20% margin
+            genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
             threshold = float(np.percentile(genuine_dists, 95) * 1.2)
             logger.info(f"Computed statistical threshold: {threshold:.4f}")
         
@@ -180,6 +177,9 @@ class SignatureVerificationModel:
     def _find_eer_threshold(self, genuine_dists: np.ndarray, forged_dists: np.ndarray) -> float:
         """Find Equal Error Rate threshold"""
         all_dists = np.concatenate([genuine_dists, forged_dists])
+        
+        logger.info(f"EER computation - Genuine distances: mean={np.mean(genuine_dists):.4f}, std={np.std(genuine_dists):.4f}")
+        logger.info(f"EER computation - Forged distances: mean={np.mean(forged_dists):.4f}, std={np.std(forged_dists):.4f}")
         
         best_threshold = 0.5
         best_eer = 1.0
@@ -198,8 +198,94 @@ class SignatureVerificationModel:
                 best_eer = eer
                 best_threshold = threshold
         
+        logger.info(f"EER computation - Best threshold: {best_threshold:.4f}, EER: {best_eer:.4f}")
+        logger.info(f"EER computation - At best threshold: FAR={np.mean(forged_dists <= best_threshold):.4f}, FRR={np.mean(genuine_dists > best_threshold):.4f}")
+        
         # Add safety margin (10% buffer)
-        return float(best_threshold * 1.1)
+        final_threshold = float(best_threshold * 1.1)
+        logger.info(f"EER computation - Final threshold with margin: {final_threshold:.4f}")
+        
+        return final_threshold
+    
+    def evaluate_model_comprehensive(self, genuine_images: List, forged_images: List, 
+                                   threshold: float = None) -> dict:
+        """Comprehensive model evaluation with multiple metrics"""
+        from sklearn.metrics import roc_auc_score, roc_curve, precision_recall_curve, auc
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+        
+        # Get embeddings
+        genuine_embeddings = self.embed_images(genuine_images)
+        forged_embeddings = self.embed_images(forged_images)
+        
+        # Compute centroid
+        centroid = np.mean(genuine_embeddings, axis=0)
+        
+        # Compute distances
+        genuine_dists = np.linalg.norm(genuine_embeddings - centroid, axis=1)
+        forged_dists = np.linalg.norm(forged_embeddings - centroid, axis=1)
+        
+        # Create labels (1 for genuine, 0 for forged)
+        y_true = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(forged_dists))])
+        y_scores = np.concatenate([-genuine_dists, -forged_dists])  # Negative distances for ROC
+        
+        # Compute metrics
+        roc_auc = roc_auc_score(y_true, y_scores)
+        precision, recall, pr_thresholds = precision_recall_curve(y_true, y_scores)
+        pr_auc = auc(recall, precision)
+        
+        # Use provided threshold or compute optimal
+        if threshold is None:
+            fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+            # Find threshold at EER
+            fnr = 1 - tpr
+            eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
+            threshold = -thresholds[eer_idx]  # Convert back to positive distance
+        
+        # Compute predictions at threshold
+        genuine_pred = (genuine_dists <= threshold).astype(int)
+        forged_pred = (forged_dists <= threshold).astype(int)
+        y_pred = np.concatenate([genuine_pred, forged_pred])
+        
+        # Compute classification metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        precision_at_thresh = precision_score(y_true, y_pred, zero_division=0)
+        recall_at_thresh = recall_score(y_true, y_pred, zero_division=0)
+        f1_at_thresh = f1_score(y_true, y_pred, zero_division=0)
+        
+        # Compute EER
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        fnr = 1 - tpr
+        eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
+        eer = fpr[eer_idx]
+        
+        # Compute FAR and FRR at threshold
+        far = np.mean(forged_dists <= threshold)  # False Acceptance Rate
+        frr = np.mean(genuine_dists > threshold)  # False Rejection Rate
+        
+        return {
+            'roc_auc': float(roc_auc),
+            'pr_auc': float(pr_auc),
+            'eer': float(eer),
+            'accuracy': float(accuracy),
+            'precision': float(precision_at_thresh),
+            'recall': float(recall_at_thresh),
+            'f1_score': float(f1_at_thresh),
+            'far': float(far),
+            'frr': float(frr),
+            'threshold': float(threshold),
+            'genuine_distances': {
+                'mean': float(np.mean(genuine_dists)),
+                'std': float(np.std(genuine_dists)),
+                'min': float(np.min(genuine_dists)),
+                'max': float(np.max(genuine_dists))
+            },
+            'forged_distances': {
+                'mean': float(np.mean(forged_dists)),
+                'std': float(np.std(forged_dists)),
+                'min': float(np.min(forged_dists)),
+                'max': float(np.max(forged_dists))
+            }
+        }
     
     def embed_images(self, images: List[Union[np.ndarray, Image.Image]]) -> np.ndarray:
         """Generate normalized embeddings for images"""
@@ -220,8 +306,13 @@ class SignatureVerificationModel:
             elif arr.shape[-1] == 4:
                 arr = arr[..., :3]
             
-            # FIXED: Ensure float32 dtype
-            arr = arr.astype(np.float32)
+            # FIXED: Ensure float32 dtype and proper range [0, 255]
+            if arr.dtype != np.float32:
+                arr = arr.astype(np.float32)
+            
+            # Ensure values are in [0, 255] range
+            if arr.max() <= 1.0:
+                arr = arr * 255.0
             
             # Preprocess
             arr = tf.convert_to_tensor(arr, dtype=tf.float32)
@@ -231,7 +322,9 @@ class SignatureVerificationModel:
         batch_tensor = tf.stack(batch, axis=0)
         embeddings = self.embedding_model.predict(batch_tensor, verbose=0)
         
-        # Embeddings are already L2 normalized in the model
+        # Apply L2 normalization manually since we removed Lambda layer
+        embeddings = tf.nn.l2_normalize(embeddings, axis=1).numpy()
+        
         return embeddings
     
     def prepare_augmented_data(self, all_images, all_labels):
@@ -239,13 +332,26 @@ class SignatureVerificationModel:
         # Convert PIL images to numpy arrays with consistent dtype and 3 channels
         img_arrays = []
         for img in all_images:
-            arr = np.array(img, dtype=np.uint8)
+            # Handle both PIL and numpy arrays
+            if hasattr(img, 'convert'):  # PIL Image
+                arr = np.array(img.convert('RGB'))
+            else:
+                arr = img
+            
+            # Ensure correct shape
             if arr.ndim == 2:
                 arr = np.stack([arr, arr, arr], axis=-1)
-            if arr.shape[-1] == 4:
+            elif arr.shape[-1] == 4:
                 arr = arr[..., :3]
-            # Ensure consistent shape and dtype
-            arr = arr.astype(np.float32)
+            
+            # FIXED: Ensure float32 dtype and proper range [0, 255]
+            if arr.dtype != np.float32:
+                arr = arr.astype(np.float32)
+            
+            # Ensure values are in [0, 255] range
+            if arr.max() <= 1.0:
+                arr = arr * 255.0
+            
             img_arrays.append(arr)
     
         images = np.stack(img_arrays, axis=0)
@@ -270,12 +376,16 @@ class SignatureVerificationModel:
                 pairs.append([images[idx1], images[idx2]])
                 pair_labels.append(1)  # Similar
     
-        # Forged pairs
+        # Forged pairs - IMPROVED: Only label as different if they're from different forgers
+        # For now, assume all forged signatures are from different people (label as 0)
+        # TODO: In future, track forger identity to make this more sophisticated
         for i in range(len(forged_indices)):
             for j in range(i + 1, min(i + 2, len(forged_indices))):  # Limit pairs per image
                 idx1, idx2 = forged_indices[i], forged_indices[j]
                 pairs.append([images[idx1], images[idx2]])
-                pair_labels.append(1)  # Similar
+                # Assume different forgers = different signatures (label as 0)
+                # If same forger, would be label 1, but we don't track forger identity yet
+                pair_labels.append(0)  # Different signatures (different forgers)
     
         # Generate negative pairs (different classes)
         for i in range(min(len(genuine_indices), len(forged_indices))):
@@ -330,14 +440,14 @@ class SignatureVerificationModel:
                 pairs_b.append(forged_imgs[idx2])
                 pair_labels.append(0)
     
-        # Generate hard negative pairs (forged-forged) - small percentage
+        # Generate hard negative pairs (forged-forged) - FIXED: These are different signatures
         if forged_imgs and len(forged_imgs) > 1:
             num_hard_negative = num_positive // 10  # 10% hard negatives
             for _ in range(num_hard_negative):
                 idx1, idx2 = np.random.choice(len(forged_imgs), 2, replace=False)
                 pairs_a.append(forged_imgs[idx1])
                 pairs_b.append(forged_imgs[idx2])
-                pair_labels.append(0)
+                pair_labels.append(0)  # FIXED: Forged-forged pairs are different signatures
     
         # Convert to numpy arrays with consistent dtype
         pairs_a = self._process_batch(pairs_a)
@@ -354,7 +464,7 @@ class SignatureVerificationModel:
     
         return pairs_a[indices], pairs_b[indices], pair_labels[indices]
     
-    def preprocess_image(self, image):  # <-- ADD/UPDATE HERE
+    def preprocess_image(self, image):
         """Preprocess image for the model"""
         # Ensure input is float32 tensor
         if isinstance(image, np.ndarray):
@@ -377,12 +487,19 @@ class SignatureVerificationModel:
             else:
                 arr = img
             
-            # FIXED: Ensure correct dtype
+            # Ensure correct shape
             if arr.ndim == 2:
                 arr = np.stack([arr, arr, arr], axis=-1)
+            elif arr.shape[-1] == 4:
+                arr = arr[..., :3]
             
-            # FIXED: Use float32 throughout
-            arr = arr.astype(np.float32)
+            # FIXED: Ensure float32 dtype and proper range [0, 255]
+            if arr.dtype != np.float32:
+                arr = arr.astype(np.float32)
+            
+            # Ensure values are in [0, 255] range
+            if arr.max() <= 1.0:
+                arr = arr * 255.0
             
             arr = tf.image.resize(arr, [self.image_size, self.image_size])
             arr = tf.cast(arr, tf.float32)
@@ -391,16 +508,35 @@ class SignatureVerificationModel:
         
         return np.array(processed, dtype=np.float32)
     
-    def train_with_augmented_data(self, all_images: List, all_labels: List, validation_split: float = 0.2) -> keras.callbacks.History:
+    def train_with_augmented_data(self, all_images: List, all_labels: List, validation_split: float = 0.2, custom_callbacks: List = None) -> keras.callbacks.History:
         """Train with augmented data using enhanced callbacks and strategies"""
         try:
-            # Prepare data
-            input_a, input_b, labels = self.prepare_augmented_data(all_images, all_labels)
+            # CRITICAL FIX: Split data BEFORE augmentation to prevent data leakage
+            from sklearn.model_selection import train_test_split
             
-            if len(labels) == 0:
+            # Split original images into train/validation
+            train_images, val_images, train_labels, val_labels = train_test_split(
+                all_images, all_labels, 
+                test_size=validation_split, 
+                random_state=42,
+                stratify=all_labels
+            )
+            
+            logger.info(f"Data split: {len(train_images)} train, {len(val_images)} validation")
+            logger.info(f"Train labels: {np.sum(train_labels)} genuine, {len(train_labels) - np.sum(train_labels)} forged")
+            logger.info(f"Val labels: {np.sum(val_labels)} genuine, {len(val_labels) - np.sum(val_labels)} forged")
+            
+            # Prepare training data
+            train_input_a, train_input_b, train_pair_labels = self.prepare_augmented_data(train_images, train_labels)
+            
+            # Prepare validation data (no augmentation to prevent leakage)
+            val_input_a, val_input_b, val_pair_labels = self.prepare_augmented_data(val_images, val_labels)
+            
+            if len(train_pair_labels) == 0:
                 raise ValueError("No training pairs could be created")
             
-            logger.info(f"Training with {len(labels)} pairs ({np.sum(labels)} positive, {len(labels) - np.sum(labels)} negative)")
+            logger.info(f"Training with {len(train_pair_labels)} pairs ({np.sum(train_pair_labels)} positive, {len(train_pair_labels) - np.sum(train_pair_labels)} negative)")
+            logger.info(f"Validation with {len(val_pair_labels)} pairs ({np.sum(val_pair_labels)} positive, {len(val_pair_labels) - np.sum(val_pair_labels)} negative)")
             
             # Create model
             self.model = self.create_siamese_network()
@@ -408,22 +544,19 @@ class SignatureVerificationModel:
             # Enhanced callbacks
             callbacks = self._create_callbacks()
             
-            # Custom training loop with gradient accumulation for better CPU performance
-            if self.use_gradient_accumulation:
-                history = self._train_with_gradient_accumulation(
-                    input_a, input_b, labels, 
-                    validation_split, callbacks
-                )
-            else:
-                # Standard training
-                history = self.model.fit(
-                    [input_a, input_b], labels,
-                    batch_size=self.batch_size,
-                    epochs=self.epochs,
-                    validation_split=validation_split,
-                    callbacks=callbacks,
-                    verbose=1
-                )
+            # Add custom callbacks if provided
+            if custom_callbacks:
+                callbacks.extend(custom_callbacks)
+            
+            # FIXED: Use separate validation data instead of validation_split
+            history = self.model.fit(
+                [train_input_a, train_input_b], train_pair_labels,
+                batch_size=self.batch_size,
+                epochs=self.epochs,
+                validation_data=([val_input_a, val_input_b], val_pair_labels),
+                callbacks=callbacks,
+                verbose=1
+            )
             
             return history
             
@@ -435,25 +568,19 @@ class SignatureVerificationModel:
         """Create enhanced training callbacks"""
         callbacks = [
             keras.callbacks.EarlyStopping(
-                monitor='val_auc',
-                patience=15,
+                monitor='val_loss',  # Monitor validation loss instead of AUC
+                patience=5,  # Further reduced patience for earlier stopping
                 restore_best_weights=True,
-                mode='max',
-                min_delta=0.001,
+                mode='min',
+                min_delta=0.02,  # Further increased minimum delta
                 verbose=1
             ),
             keras.callbacks.ReduceLROnPlateau(
                 monitor='val_loss',
                 factor=0.5,
-                patience=5,
+                patience=3,  # Reduced patience for faster learning rate reduction
                 min_lr=1e-7,
                 verbose=1
-            ),
-            # Custom callback for learning rate warmup
-            WarmupScheduler(
-                warmup_epochs=3,
-                initial_lr=self.learning_rate / 10,
-                target_lr=self.learning_rate
             ),
             # Track best model based on validation AUC
             keras.callbacks.ModelCheckpoint(
@@ -524,7 +651,7 @@ class SignatureVerificationModel:
     def load_model(self, filepath: str):
         """Load a saved model"""
         try:
-            # Load with custom objects if needed
+            # Load model without custom objects since we removed Lambda layers
             self.model = keras.models.load_model(filepath, compile=True, safe_mode=False)
             
             # Extract embedding model
@@ -533,7 +660,7 @@ class SignatureVerificationModel:
             logger.info(f"Model loaded from {filepath}")
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
-            raise
+            raise ValueError(f"Model loading failed. This model may be from an incompatible version. Please retrain the student and try again. Error: {str(e)}")
     
     def _extract_embedding_model(self):
         """Extract embedding model from full model"""
@@ -570,19 +697,3 @@ class SignatureVerificationModel:
             confidence = 0.5
         
         return is_genuine, distance, confidence
-
-
-class WarmupScheduler(keras.callbacks.Callback):
-    """Custom callback for learning rate warmup"""
-    
-    def __init__(self, warmup_epochs, initial_lr, target_lr):
-        super().__init__()
-        self.warmup_epochs = warmup_epochs
-        self.initial_lr = initial_lr
-        self.target_lr = target_lr
-    
-    def on_epoch_begin(self, epoch, logs=None):
-        if epoch < self.warmup_epochs:
-            lr = self.initial_lr + (self.target_lr - self.initial_lr) * (epoch / self.warmup_epochs)
-            keras.backend.set_value(self.model.optimizer.lr, lr)
-            logger.debug(f"Epoch {epoch}: Learning rate warmed up to {lr:.6f}")

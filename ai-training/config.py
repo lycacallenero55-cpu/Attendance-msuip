@@ -17,7 +17,7 @@ class Settings:
     MODEL_IMAGE_SIZE = int(os.getenv("MODEL_IMAGE_SIZE", 224))
     MODEL_BATCH_SIZE = int(os.getenv("MODEL_BATCH_SIZE", 32))
     MODEL_EPOCHS = int(os.getenv("MODEL_EPOCHS", 50))
-    MODEL_LEARNING_RATE = float(os.getenv("MODEL_LEARNING_RATE", 0.001))
+    MODEL_LEARNING_RATE = float(os.getenv("MODEL_LEARNING_RATE", 0.0002))  # Further reduced to prevent overfitting
 
         # CPU Optimization
     USE_CPU_OPTIMIZATION: bool = True

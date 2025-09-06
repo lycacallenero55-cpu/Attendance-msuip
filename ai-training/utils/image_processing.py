@@ -95,11 +95,23 @@ def preprocess_image(image: Image.Image, target_size: int) -> Image.Image:
         # 6) Resize to target and convert to RGB
         out = cv2.resize(canvas, (target_size, target_size), interpolation=cv2.INTER_AREA)
         out_pil = Image.fromarray(out).convert('RGB')
-        return out_pil
+        
+        # FIXED: Normalize to [0,1] range for consistent model input
+        # Convert to numpy array with float32 dtype and normalize
+        out_array = np.array(out_pil, dtype=np.float32) / 255.0
+        return out_array
 
     except Exception as e:
         logger.error(f"Image preprocessing failed: {e}")
-        raise
+        # Fallback: simple resize and convert
+        try:
+            fallback = image.convert('RGB').resize((target_size, target_size), Image.Resampling.LANCZOS)
+            out_array = np.array(fallback, dtype=np.float32) / 255.0
+            logger.warning("Using fallback preprocessing")
+            return out_array
+        except Exception as fallback_error:
+            logger.error(f"Fallback preprocessing also failed: {fallback_error}")
+            raise
 
 def get_image_quality_score(image: Image.Image) -> float:
     """Calculate a basic image quality score"""
@@ -112,8 +124,11 @@ def get_image_quality_score(image: Image.Image) -> float:
         img_array = np.array(gray)
         variance = np.var(img_array)
         
-        # Normalize to 0-1 scale
-        quality_score = min(variance / 10000, 1.0)
+        # Calculate improved quality score combining variance and sharpness
+        sharpness = cv2.Laplacian(img_array, cv2.CV_64F).var()
+        
+        # Combine sharpness and variance for better quality assessment
+        quality_score = min((sharpness/1000) * (variance/5000), 1.0)
         
         return float(quality_score)
     
