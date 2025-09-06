@@ -300,6 +300,11 @@ async def identify_signature_owner(
                 if cached_model:
                     model_manager.embedding_model = cached_model
                     logger.info(f"✅ Model {model.get('id')} loaded from cache")
+                    logger.info(f"🔍 DEBUG - Model {model.get('id')} architecture:")
+                    logger.info(f"   - Model type: {type(cached_model)}")
+                    logger.info(f"   - Model input shape: {cached_model.input_shape}")
+                    logger.info(f"   - Model output shape: {cached_model.output_shape}")
+                    logger.info(f"   - Model layers count: {len(cached_model.layers)}")
                 else:
                     logger.warning(f"❌ Could not load model {model.get('id')}")
                     continue
@@ -328,6 +333,16 @@ async def identify_signature_owner(
                 is_match = dist <= threshold
 
                 logger.info(f"📊 Model {model.get('id')} (Student {model.get('student_id')}): dist={dist:.4f}, threshold={threshold:.4f}, score={score:.4f}, is_match={is_match}")
+                
+                # DEBUG: Log detailed information about the scoring
+                logger.info(f"🔍 DEBUG - Model {model.get('id')} details:")
+                logger.info(f"   - Test embedding shape: {test_embedding.shape}")
+                logger.info(f"   - Test embedding range: [{test_embedding.min():.4f}, {test_embedding.max():.4f}]")
+                logger.info(f"   - Centroid shape: {centroid.shape}")
+                logger.info(f"   - Centroid range: [{centroid.min():.4f}, {centroid.max():.4f}]")
+                logger.info(f"   - Distance calculation: ||{test_embedding.shape} - {centroid.shape}|| = {dist:.4f}")
+                logger.info(f"   - Threshold: {threshold:.4f}")
+                logger.info(f"   - Sigmoid score: 1/(1+exp(5*({dist:.4f}-{threshold:.4f}))) = {score:.4f}")
 
                 if score > best_score:
                     logger.info(f"🏆 New best model: {model.get('id')} (Student {model.get('student_id')}) with score {score:.4f}")
