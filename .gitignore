@@ -113,4 +113,5 @@ ai-training/*.cover
 ai-training/.hypothesis/
 ai-training/.mypy_cache/
 ai-training/.dmypy.json
-ai-training/dmypy.json
+ai-training/dmypy.jsoncore
+*.core
