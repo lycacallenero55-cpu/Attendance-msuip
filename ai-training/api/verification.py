@@ -239,19 +239,30 @@ async def identify_signature_owner(
     This endpoint does NOT require selecting a student. It searches across all completed models
     using each model's own embedding network and stored prototype centroid/threshold.
     """
+    logger.info("🚀 STARTING SIGNATURE IDENTIFICATION")
+    logger.info(f"📁 Received file: {test_file.filename}, size: {test_file.size}")
+    
     try:
         # Validate image
         if not validate_image(test_file):
+            logger.error("❌ Invalid image file")
             raise HTTPException(status_code=400, detail="Invalid test image")
 
+        logger.info("✅ Image validation passed")
+        
         # Load and preprocess once to PIL; will convert to tensors per model
         test_data = await test_file.read()
         test_image = Image.open(io.BytesIO(test_data))
         test_processed = preprocess_image(test_image, settings.MODEL_IMAGE_SIZE)
+        
+        logger.info(f"✅ Image preprocessed, shape: {test_processed.shape}")
 
         # Fetch all completed models that have prototype metadata
         all_models = await db_manager.get_trained_models()
+        logger.info(f"📊 Found {len(all_models) if all_models else 0} total models in database")
+        
         candidates = [m for m in (all_models or []) if m.get("status") == "completed" and m.get("prototype_centroid") is not None]
+        logger.info(f"📊 Found {len(candidates)} completed models with prototype data")
         
         # Additional validation: ensure models have reasonable thresholds
         valid_candidates = []
@@ -270,7 +281,10 @@ async def identify_signature_owner(
                 logger.warning(f"Model {model.get('id')} has no threshold")
         
         candidates = valid_candidates
+        logger.info(f"📊 After validation: {len(candidates)} valid candidates")
+        
         if not candidates:
+            logger.error("❌ No valid trained models available")
             raise HTTPException(status_code=404, detail="No valid trained models available")
 
         best = None
