@@ -35,7 +35,13 @@ async def load_signature_model(model):
                 if not os.path.exists(local_path):
                     # Download from Supabase
                     from utils.storage import download_from_supabase
-                    await download_from_supabase(embedding_path, local_path)
+                    temp_path = await download_from_supabase(embedding_path)
+                    # Copy temp file to local path
+                    import shutil
+                    shutil.copy2(temp_path, local_path)
+                    # Clean up temp file
+                    from utils.storage import cleanup_local_file
+                    cleanup_local_file(temp_path)
                 embedding_path = local_path
             
             model_manager.embedding_model = keras.models.load_model(embedding_path)
@@ -55,7 +61,13 @@ async def load_signature_model(model):
                 if not os.path.exists(local_path):
                     # Download from Supabase
                     from utils.storage import download_from_supabase
-                    await download_from_supabase(model_path, local_path)
+                    temp_path = await download_from_supabase(model_path)
+                    # Copy temp file to local path
+                    import shutil
+                    shutil.copy2(temp_path, local_path)
+                    # Clean up temp file
+                    from utils.storage import cleanup_local_file
+                    cleanup_local_file(temp_path)
                 model_path = local_path
             
             logger.info(f"🔄 Loading full model from: {model_path}")
@@ -67,7 +79,6 @@ async def load_signature_model(model):
             raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
     
     return model_manager
-from utils.augmentation import SignatureAugmentation
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

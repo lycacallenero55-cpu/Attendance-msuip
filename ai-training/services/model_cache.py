@@ -73,7 +73,13 @@ class ModelCache:
             local_path = os.path.join(settings.LOCAL_MODELS_DIR, os.path.basename(remote_path))
             if not os.path.exists(local_path):
                 logger.info(f"📥 Downloading model from {remote_path} to {local_path}")
-                await download_from_supabase(remote_path, local_path)
+                temp_path = await download_from_supabase(remote_path)
+                # Copy temp file to local path
+                import shutil
+                shutil.copy2(temp_path, local_path)
+                # Clean up temp file
+                from utils.storage import cleanup_local_file
+                cleanup_local_file(temp_path)
             return local_path
         return remote_path
     
