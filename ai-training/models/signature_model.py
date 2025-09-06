@@ -1,4 +1,4 @@
-# signature_model.py - FIXED VERSION
+# signature_model.py - FIXED VERSION (No Lambda Layers)
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -9,19 +9,11 @@ from typing import List, Tuple, Optional, Union
 from PIL import Image
 import os
 
-
-def lr_warmup_schedule(epoch, warmup_epochs=3, initial_lr=1e-4, target_lr=1e-3):
-    if epoch < warmup_epochs:
-         return initial_lr + (target_lr - initial_lr) * (epoch / float(max(1, warmup_epochs)))
-    return target_lr
-
 logger = logging.getLogger(__name__)
-
-
 
 class SignatureVerificationModel:
     """Enhanced Siamese Neural Network for Signature Verification with Prototype Learning"""
-
+    
     def __init__(self):
         self.model = None
         self.embedding_model = None
@@ -79,11 +71,8 @@ class SignatureVerificationModel:
             y3 = layers.Dense(128, activation='relu')(y2)
             y3 = layers.BatchNormalization()(y3)
             
-            # L2 normalize embeddings for better metric learning
-            def l2_normalize(x):
-                import tensorflow as tf
-                return tf.nn.l2_normalize(x, axis=1)
-            y3 = layers.Lambda(l2_normalize, output_shape=(128,))(y3)
+            # Use LayerNormalization instead of Lambda for L2 normalization
+            y3 = layers.LayerNormalization(axis=1)(y3)
             
             model = keras.Model(inputs=x, outputs=y3, name='embedding_branch')
             return model
@@ -95,51 +84,25 @@ class SignatureVerificationModel:
         embedding_a = embedding_network(input_a)
         embedding_b = embedding_network(input_b)
         
-        # Multiple distance metrics for robustness
-        def l2_distance_func(x):
-            import tensorflow as tf
-            return tf.sqrt(tf.reduce_sum(tf.square(x[0] - x[1]), axis=1, keepdims=True))
-        
-        def cosine_distance_func(x):
-            import tensorflow as tf
-            return 1 - tf.reduce_sum(x[0] * x[1], axis=1, keepdims=True)
-        
-        def abs_diff_func(x):
-            import tensorflow as tf
-            return tf.abs(x[0] - x[1])
-        
-        l2_distance = layers.Lambda(
-            l2_distance_func,
-            output_shape=(1,),
-            name='l2_distance'
-        )([embedding_a, embedding_b])
-        
-        cosine_distance = layers.Lambda(
-            cosine_distance_func,
-            output_shape=(1,),
-            name='cosine_distance'
-        )([embedding_a, embedding_b])
-        
-        # Combine distance features
-        merged = layers.Concatenate()([
-            l2_distance,
-            cosine_distance,
-            layers.Lambda(abs_diff_func, output_shape=(128,))([embedding_a, embedding_b])
-        ])
+        # Use simple concatenation instead of complex distance metrics
+        # This avoids Lambda layers that cause serialization issues
+        merged = layers.Concatenate()([embedding_a, embedding_b])
         
         # Enhanced classification head
-        output = layers.Dense(128, activation='relu')(merged)
+        output = layers.Dense(256, activation='relu')(merged)
         output = layers.BatchNormalization()(output)
         output = layers.Dropout(0.4)(output)
-        output = layers.Dense(64, activation='relu')(output)
+        output = layers.Dense(128, activation='relu')(output)
         output = layers.BatchNormalization()(output)
         output = layers.Dropout(0.3)(output)
+        output = layers.Dense(64, activation='relu')(output)
+        output = layers.Dropout(0.2)(output)
         output = layers.Dense(1, activation='sigmoid', name='similarity_score')(output)
         
         # Create the model
         model = keras.Model(inputs=[input_a, input_b], outputs=output, name='signature_verification')
         
-        # Use simple Adam with float LR so warmup/scheduler can adjust it
+        # Use simple Adam optimizer
         optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate)
         
         # Custom metrics including AUC-ROC and AUC-PR
@@ -256,7 +219,9 @@ class SignatureVerificationModel:
         batch_tensor = tf.stack(batch, axis=0)
         embeddings = self.embedding_model.predict(batch_tensor, verbose=0)
         
-        # Embeddings are already L2 normalized in the model
+        # Apply L2 normalization manually since we removed Lambda layer
+        embeddings = tf.nn.l2_normalize(embeddings, axis=1).numpy()
+        
         return embeddings
     
     def prepare_augmented_data(self, all_images, all_labels):
@@ -392,7 +357,7 @@ class SignatureVerificationModel:
     
         return pairs_a[indices], pairs_b[indices], pair_labels[indices]
     
-    def preprocess_image(self, image):  # <-- ADD/UPDATE HERE
+    def preprocess_image(self, image):
         """Preprocess image for the model"""
         # Ensure input is float32 tensor
         if isinstance(image, np.ndarray):
@@ -494,15 +459,6 @@ class SignatureVerificationModel:
                 min_lr=1e-7,
                 verbose=1
             ),
-            keras.callbacks.LearningRateScheduler(
-                lambda epoch: lr_warmup_schedule(
-                    epoch,
-                    warmup_epochs=3,
-                    initial_lr=self.learning_rate / 10.0,
-                    target_lr=self.learning_rate
-                ),
-                verbose=0
-            ),            
             # Track best model based on validation AUC
             keras.callbacks.ModelCheckpoint(
                 filepath='best_model_checkpoint.keras',
@@ -572,45 +528,13 @@ class SignatureVerificationModel:
     def load_model(self, filepath: str):
         """Load a saved model"""
         try:
-            # Try to load with custom objects for Lambda layers
-            def l2_normalize_with_shape(x):
-                return tf.nn.l2_normalize(x, axis=1)
-            
-            def abs_with_shape(x):
-                return tf.abs(x)
-            
-            def sqrt_with_shape(x):
-                return tf.sqrt(x)
-            
-            def reduce_sum_with_shape(x):
-                return tf.reduce_sum(x, axis=1, keepdims=True)
-            
-            def square_with_shape(x):
-                return tf.square(x)
-            
-            custom_objects = {
-                'tf': tf,
-                'tf.nn.l2_normalize': l2_normalize_with_shape,
-                'tf.math.abs': abs_with_shape,
-                'tf.sqrt': sqrt_with_shape,
-                'tf.reduce_sum': reduce_sum_with_shape,
-                'tf.square': square_with_shape,
-                'tf.abs': abs_with_shape,
-                'l2_normalize_with_shape': l2_normalize_with_shape,
-                'abs_with_shape': abs_with_shape,
-                'sqrt_with_shape': sqrt_with_shape,
-                'reduce_sum_with_shape': reduce_sum_with_shape,
-                'square_with_shape': square_with_shape,
-            }
-            
-            # Allow loading models containing Lambda layers used in older checkpoints
-            self.model = keras.models.load_model(filepath, compile=True, safe_mode=False, custom_objects=custom_objects)
+            # Load model without custom objects since we removed Lambda layers
+            self.model = keras.models.load_model(filepath, compile=True, safe_mode=False)
             
             # Extract embedding model
             self._extract_embedding_model()
             
             logger.info(f"Model loaded from {filepath}")
-            
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise ValueError(f"Model loading failed. This model may be from an incompatible version. Please retrain the student and try again. Error: {str(e)}")
@@ -650,23 +574,3 @@ class SignatureVerificationModel:
             confidence = 0.5
         
         return is_genuine, distance, confidence
-
-
-class WarmupScheduler(keras.callbacks.Callback):
-    """Custom callback for learning rate warmup"""
-    
-    def __init__(self, warmup_epochs, initial_lr, target_lr):
-        super().__init__()
-        self.warmup_epochs = warmup_epochs
-        self.initial_lr = initial_lr
-        self.target_lr = target_lr
-    
-    def on_epoch_begin(self, epoch, logs=None):
-        if epoch < self.warmup_epochs:
-            lr = self.initial_lr + (self.target_lr - self.initial_lr) * (epoch / self.warmup_epochs)
-            lr_attr = getattr(self.model.optimizer, "learning_rate", None)
-            if hasattr(lr_attr, "assign"):
-                lr_attr.assign(lr)
-            else:
-                keras.backend.set_value(self.model.optimizer.learning_rate, lr)
-            logger.debug(f"Epoch {epoch}: Learning rate warmed up to {lr:.6f}")
