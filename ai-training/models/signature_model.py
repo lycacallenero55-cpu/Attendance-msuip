@@ -214,78 +214,39 @@ class SignatureVerificationModel:
         genuine_dists = np.linalg.norm(genuine_embeddings - centroid, axis=1)
         forged_dists = np.linalg.norm(forged_embeddings - centroid, axis=1)
         
-        # Manual ROC computation without sklearn
-        all_dists = np.concatenate([genuine_dists, forged_dists])
-        all_labels = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(forged_dists))])
+        # Create labels (1 for genuine, 0 for forged)
+        y_true = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(forged_dists))])
+        y_scores = np.concatenate([-genuine_dists, -forged_dists])  # Negative distances for ROC
         
-        # Sort by distance (ascending)
-        sorted_indices = np.argsort(all_dists)
-        sorted_dists = all_dists[sorted_indices]
-        sorted_labels = all_labels[sorted_indices]
-        
-        # Compute ROC curve manually
-        thresholds = np.unique(sorted_dists)
-        tpr = np.zeros(len(thresholds))
-        fpr = np.zeros(len(thresholds))
-        
-        for i, thresh in enumerate(thresholds):
-            # True Positive Rate (sensitivity)
-            tp = np.sum((sorted_labels == 1) & (sorted_dists <= thresh))
-            fn = np.sum((sorted_labels == 1) & (sorted_dists > thresh))
-            tpr[i] = tp / (tp + fn) if (tp + fn) > 0 else 0
-            
-            # False Positive Rate (1 - specificity)
-            fp = np.sum((sorted_labels == 0) & (sorted_dists <= thresh))
-            tn = np.sum((sorted_labels == 0) & (sorted_dists > thresh))
-            fpr[i] = fp / (fp + tn) if (fp + tn) > 0 else 0
-        
-        # Compute AUC manually (trapezoidal rule)
-        roc_auc = 0.0
-        for i in range(1, len(fpr)):
-            roc_auc += (fpr[i] - fpr[i-1]) * (tpr[i] + tpr[i-1]) / 2
-        
-        # Find EER (Equal Error Rate)
-        fnr = 1 - tpr
-        eer_idx = np.argmin(np.abs(fnr - fpr))
-        eer = fpr[eer_idx]
+        # Compute metrics
+        roc_auc = roc_auc_score(y_true, y_scores)
+        precision, recall, pr_thresholds = precision_recall_curve(y_true, y_scores)
+        pr_auc = auc(recall, precision)
         
         # Use provided threshold or compute optimal
         if threshold is None:
-            threshold = thresholds[eer_idx]
+            fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+            # Find threshold at EER
+            fnr = 1 - tpr
+            eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
+            threshold = -thresholds[eer_idx]  # Convert back to positive distance
         
         # Compute predictions at threshold
         genuine_pred = (genuine_dists <= threshold).astype(int)
         forged_pred = (forged_dists <= threshold).astype(int)
         y_pred = np.concatenate([genuine_pred, forged_pred])
-        y_true = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(forged_dists))])
         
-        # Compute classification metrics manually
-        tp = np.sum((y_true == 1) & (y_pred == 1))
-        fp = np.sum((y_true == 0) & (y_pred == 1))
-        fn = np.sum((y_true == 1) & (y_pred == 0))
-        tn = np.sum((y_true == 0) & (y_pred == 0))
+        # Compute classification metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        precision_at_thresh = precision_score(y_true, y_pred, zero_division=0)
+        recall_at_thresh = recall_score(y_true, y_pred, zero_division=0)
+        f1_at_thresh = f1_score(y_true, y_pred, zero_division=0)
         
-        accuracy = (tp + tn) / (tp + fp + fn + tn) if (tp + fp + fn + tn) > 0 else 0
-        precision_at_thresh = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall_at_thresh = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1_at_thresh = 2 * (precision_at_thresh * recall_at_thresh) / (precision_at_thresh + recall_at_thresh) if (precision_at_thresh + recall_at_thresh) > 0 else 0
-        
-        # Compute PR-AUC manually
-        precision_vals = np.zeros(len(thresholds))
-        recall_vals = np.zeros(len(thresholds))
-        
-        for i, thresh in enumerate(thresholds):
-            tp = np.sum((sorted_labels == 1) & (sorted_dists <= thresh))
-            fp = np.sum((sorted_labels == 0) & (sorted_dists <= thresh))
-            fn = np.sum((sorted_labels == 1) & (sorted_dists > thresh))
-            
-            precision_vals[i] = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall_vals[i] = tp / (tp + fn) if (tp + fn) > 0 else 0
-        
-        # Compute PR-AUC using trapezoidal rule
-        pr_auc = 0.0
-        for i in range(1, len(recall_vals)):
-            pr_auc += (recall_vals[i] - recall_vals[i-1]) * (precision_vals[i] + precision_vals[i-1]) / 2
+        # Compute EER
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        fnr = 1 - tpr
+        eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
+        eer = fpr[eer_idx]
         
         # Compute FAR and FRR at threshold
         far = np.mean(forged_dists <= threshold)  # False Acceptance Rate
