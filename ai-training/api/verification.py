@@ -180,10 +180,12 @@ async def verify_signature(
             v2 = aug.augment_image(base_np, is_genuine=True)
             v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
             v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-            # FIXED: Use same preprocessing pipeline
+            # FIXED: Use same preprocessing pipeline for consistency
+            v1_processed = preprocess_image(v1_pil, settings.MODEL_IMAGE_SIZE)
+            v2_processed = preprocess_image(v2_pil, settings.MODEL_IMAGE_SIZE)
             logger.info("🔍 Computing embeddings for augmented variants...")
-            embeddings.append(model_manager.embed_images([v1_pil])[0])
-            embeddings.append(model_manager.embed_images([v2_pil])[0])
+            embeddings.append(model_manager.embed_images([v1_processed])[0])
+            embeddings.append(model_manager.embed_images([v2_processed])[0])
             logger.info("✅ Augmented embeddings computed successfully")
         except Exception:
             pass
@@ -344,13 +346,13 @@ async def identify_signature_owner(
                     base_np = _np.array(test_processed.convert('L'))
                     v1 = aug.augment_image(base_np, is_genuine=True)
                     v2 = aug.augment_image(base_np, is_genuine=True)
-            v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-            v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-            # FIXED: Use same preprocessing pipeline for consistency
-            v1_processed = preprocess_image(v1_pil, settings.MODEL_IMAGE_SIZE)
-            v2_processed = preprocess_image(v2_pil, settings.MODEL_IMAGE_SIZE)
-            embeddings.append(model_manager.embed_images([v1_processed])[0])
-            embeddings.append(model_manager.embed_images([v2_processed])[0])
+                    v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
+                    v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
+                    # FIXED: Use same preprocessing pipeline for consistency
+                    v1_processed = preprocess_image(v1_pil, settings.MODEL_IMAGE_SIZE)
+                    v2_processed = preprocess_image(v2_pil, settings.MODEL_IMAGE_SIZE)
+                    embeddings.append(model_manager.embed_images([v1_processed])[0])
+                    embeddings.append(model_manager.embed_images([v2_processed])[0])
                 except Exception:
                     pass
                 test_embedding = np.mean(np.stack(embeddings, axis=0), axis=0)
