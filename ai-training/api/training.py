@@ -11,7 +11,7 @@ import logging
 import asyncio
 
 from models.database import db_manager
-from models.signature_model import SignatureVerificationModel
+from models.real_signature_model import RealSignatureVerificationModel
 from utils.image_processing import preprocess_image
 from utils.storage import save_to_supabase, cleanup_local_file
 from utils.augmentation import SignatureAugmentation
@@ -23,8 +23,8 @@ from config import settings
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Global model instance
-model_manager = SignatureVerificationModel()
+# Global REAL AI model instance
+real_ai_manager = RealSignatureVerificationModel(max_students=150)
 
 async def train_signature_model(student, genuine_data, forged_data, job=None):
     """
