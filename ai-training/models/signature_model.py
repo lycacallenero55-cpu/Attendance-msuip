@@ -376,12 +376,16 @@ class SignatureVerificationModel:
                 pairs.append([images[idx1], images[idx2]])
                 pair_labels.append(1)  # Similar
     
-        # Forged pairs - FIXED: These should be labeled as 0 (different), not 1 (similar)
+        # Forged pairs - IMPROVED: Only label as different if they're from different forgers
+        # For now, assume all forged signatures are from different people (label as 0)
+        # TODO: In future, track forger identity to make this more sophisticated
         for i in range(len(forged_indices)):
             for j in range(i + 1, min(i + 2, len(forged_indices))):  # Limit pairs per image
                 idx1, idx2 = forged_indices[i], forged_indices[j]
                 pairs.append([images[idx1], images[idx2]])
-                pair_labels.append(0)  # FIXED: Forged-forged pairs are different signatures, not similar
+                # Assume different forgers = different signatures (label as 0)
+                # If same forger, would be label 1, but we don't track forger identity yet
+                pair_labels.append(0)  # Different signatures (different forgers)
     
         # Generate negative pairs (different classes)
         for i in range(min(len(genuine_indices), len(forged_indices))):

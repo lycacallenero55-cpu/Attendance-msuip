@@ -78,31 +78,31 @@ async def start_training(
             processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
             forged_images.append(processed_image)
         
-        # Apply MUCH MORE AGGRESSIVE data augmentation to prevent overfitting
-        logger.info(f"Applying aggressive data augmentation to {len(genuine_images)} genuine and {len(forged_images)} forged samples")
+        # Apply MODERATE data augmentation for realistic variations
+        logger.info(f"Applying moderate data augmentation to {len(genuine_images)} genuine and {len(forged_images)} forged samples")
         augmenter = SignatureAugmentation(
-            rotation_range=30.0,  # Increased from 15.0
-            scale_range=(0.7, 1.4),  # Increased from (0.9, 1.1)
-            brightness_range=0.5,  # Increased from 0.2
-            blur_probability=0.6,  # Increased from 0.3
-            thickness_variation=0.2,  # Increased from 0.1
-            elastic_alpha=15.0,  # Increased for more distortion
-            elastic_sigma=8.0,  # Increased for smoother distortions
-            noise_stddev=15.0,  # Increased for more noise
-            shear_range=0.4,  # Increased for more perspective distortion
-            perspective_distortion=0.08,  # Increased for camera angle simulation
-            camera_tilt_range=20.0,  # Increased for real-world camera tilt
-            lighting_angle_range=45.0  # Increased for lighting variations
+            rotation_range=15.0,  # Moderate rotation for natural handwriting variation
+            scale_range=(0.9, 1.1),  # Small scale changes for zoom variations
+            brightness_range=0.3,  # Moderate brightness for lighting changes
+            blur_probability=0.3,  # Some blur for camera focus issues
+            thickness_variation=0.1,  # Small thickness changes for pen pressure
+            elastic_alpha=8.0,  # Moderate elastic distortion
+            elastic_sigma=4.0,  # Smoother distortions
+            noise_stddev=5.0,  # Light noise for camera artifacts
+            shear_range=0.2,  # Moderate perspective distortion
+            perspective_distortion=0.03,  # Small camera angle simulation
+            camera_tilt_range=10.0,  # Moderate camera tilt
+            lighting_angle_range=20.0  # Moderate lighting variations
         )
         
-        # Augment genuine signatures MUCH more aggressively (5x augmentation instead of 3x)
+        # Augment genuine signatures moderately (3x augmentation)
         genuine_augmented, genuine_labels = augmenter.augment_batch(
-            genuine_images, [True] * len(genuine_images), augmentation_factor=5
+            genuine_images, [True] * len(genuine_images), augmentation_factor=3
         )
         
-        # Augment forged signatures more aggressively too (3x augmentation instead of 1x)
+        # Augment forged signatures lightly (2x augmentation)
         forged_augmented, forged_labels = augmenter.augment_batch(
-            forged_images, [False] * len(forged_images), augmentation_factor=3
+            forged_images, [False] * len(forged_images), augmentation_factor=2
         )
         
         # Combine all augmented data
@@ -368,29 +368,29 @@ async def run_async_training(job, student, genuine_data, forged_data):
             progress = 20.0 + (i + 1) / len(forged_data) * 15.0
             job_queue.update_job_progress(job.job_id, progress, f"Processing forged images... {i+1}/{len(forged_data)}")
         
-        # Apply MUCH MORE AGGRESSIVE data augmentation to prevent overfitting
-        job_queue.update_job_progress(job.job_id, 35.0, "Applying aggressive data augmentation...")
+        # Apply MODERATE data augmentation for realistic variations
+        job_queue.update_job_progress(job.job_id, 35.0, "Applying moderate data augmentation...")
         augmenter = SignatureAugmentation(
-            rotation_range=30.0,  # Increased from 15.0
-            scale_range=(0.7, 1.4),  # Increased from (0.9, 1.1)
-            brightness_range=0.5,  # Increased from 0.2
-            blur_probability=0.6,  # Increased from 0.3
-            thickness_variation=0.2,  # Increased from 0.1
-            elastic_alpha=15.0,  # Increased for more distortion
-            elastic_sigma=8.0,  # Increased for smoother distortions
-            noise_stddev=15.0,  # Increased for more noise
-            shear_range=0.4,  # Increased for more perspective distortion
-            perspective_distortion=0.08,  # Increased for camera angle simulation
-            camera_tilt_range=20.0,  # Increased for real-world camera tilt
-            lighting_angle_range=45.0  # Increased for lighting variations
+            rotation_range=15.0,  # Moderate rotation for natural handwriting variation
+            scale_range=(0.9, 1.1),  # Small scale changes for zoom variations
+            brightness_range=0.3,  # Moderate brightness for lighting changes
+            blur_probability=0.3,  # Some blur for camera focus issues
+            thickness_variation=0.1,  # Small thickness changes for pen pressure
+            elastic_alpha=8.0,  # Moderate elastic distortion
+            elastic_sigma=4.0,  # Smoother distortions
+            noise_stddev=5.0,  # Light noise for camera artifacts
+            shear_range=0.2,  # Moderate perspective distortion
+            perspective_distortion=0.03,  # Small camera angle simulation
+            camera_tilt_range=10.0,  # Moderate camera tilt
+            lighting_angle_range=20.0  # Moderate lighting variations
         )
         
         genuine_augmented, genuine_labels = augmenter.augment_batch(
-            genuine_images, [True] * len(genuine_images), augmentation_factor=5
+            genuine_images, [True] * len(genuine_images), augmentation_factor=3
         )
         
         forged_augmented, forged_labels = augmenter.augment_batch(
-            forged_images, [False] * len(forged_images), augmentation_factor=3
+            forged_images, [False] * len(forged_images), augmentation_factor=2
         )
         
         all_images = genuine_augmented + forged_augmented
@@ -423,12 +423,17 @@ async def run_async_training(job, student, genuine_data, forged_data):
         # FIXED: Use correct method name and proper data splitting
         job_queue.update_job_progress(job.job_id, 80.0, "Computing prototype and threshold...")
         
-        # Split into train/validation for threshold computation
+        # FIXED: Proper validation splitting - split each class separately
         from sklearn.model_selection import train_test_split
-        train_genuine, val_genuine, train_forged, val_forged = train_test_split(
-            genuine_images, forged_images if forged_images else [],
-            test_size=0.2, random_state=42
+        train_genuine, val_genuine = train_test_split(
+            genuine_images, test_size=0.2, random_state=42
         )
+        if forged_images:
+            train_forged, val_forged = train_test_split(
+                forged_images, test_size=0.2, random_state=42
+            )
+        else:
+            train_forged, val_forged = [], []
         
         centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
             train_genuine,

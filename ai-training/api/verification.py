@@ -157,9 +157,15 @@ async def verify_signature(
         logger.info("🔍 Computing distance between test embedding and prototype centroid...")
         dist = float(np.linalg.norm(test_embedding - centroid))
         is_genuine = dist <= threshold
-        denom = threshold if threshold and threshold > 1e-6 else 1.0
-        raw_score = 1.0 - dist / denom
-        score = float(max(0.0, min(1.0, raw_score)))
+        # Calculate similarity score using sigmoid function for better calibration
+        # Score approaches 1.0 when distance is much smaller than threshold
+        # Score approaches 0.0 when distance is much larger than threshold
+        import math
+        # Use sigmoid: score = 1 / (1 + exp(k * (distance - threshold)))
+        # k controls steepness, threshold is the decision boundary
+        k = 5.0  # Steepness parameter
+        score = 1.0 / (1.0 + math.exp(k * (dist - threshold)))
+        score = float(max(0.0, min(1.0, score)))
         
         # Log the values for debugging
         logger.info(f"🎯 VERIFICATION RESULT:")
@@ -306,9 +312,11 @@ async def identify_signature_owner(
                     threshold = 0.7
 
                 dist = float(np.linalg.norm(test_embedding - centroid))
-                denom = threshold if threshold and threshold > 1e-6 else 1.0
-                raw_score = 1.0 - dist / denom
-                score = float(max(0.0, min(1.0, raw_score)))
+                # Use same sigmoid scoring as verify endpoint
+                import math
+                k = 5.0  # Steepness parameter
+                score = 1.0 / (1.0 + math.exp(k * (dist - threshold)))
+                score = float(max(0.0, min(1.0, score)))
                 is_match = dist <= threshold
 
                 if score > best_score:

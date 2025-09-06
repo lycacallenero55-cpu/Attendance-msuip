@@ -96,9 +96,9 @@ def preprocess_image(image: Image.Image, target_size: int) -> Image.Image:
         out = cv2.resize(canvas, (target_size, target_size), interpolation=cv2.INTER_AREA)
         out_pil = Image.fromarray(out).convert('RGB')
         
-        # FIXED: Ensure consistent dtype for downstream processing
-        # Convert to numpy array with float32 dtype in [0, 255] range
-        out_array = np.array(out_pil, dtype=np.float32)
+        # FIXED: Normalize to [0,1] range for consistent model input
+        # Convert to numpy array with float32 dtype and normalize
+        out_array = np.array(out_pil, dtype=np.float32) / 255.0
         return out_array
 
     except Exception as e:
