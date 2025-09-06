@@ -98,16 +98,9 @@ async def verify_signature(
                 raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
 
         # Compute embedding with light test-time augmentation (average of few variants)
-        def embed_pil(img_pil: Image.Image):
-            arr = np.array(img_pil)
-            tensor = tf.convert_to_tensor(arr)
-            tensor = model_manager.preprocess_image(tensor)
-            tensor = tf.expand_dims(tensor, axis=0)
-            return model_manager.embedding_model.predict(tensor, verbose=0)[0]
-
-        # Create 3 variants: original + 2 mild transforms
+        # FIXED: Use the same preprocessing pipeline as training
         embeddings = []
-        embeddings.append(embed_pil(test_processed))
+        embeddings.append(model_manager.embed_images([test_processed])[0])
         try:
             aug = SignatureAugmentation(rotation_range=8.0, scale_range=(0.95, 1.05), brightness_range=0.1, blur_probability=0.15, thickness_variation=0.08)
             import numpy as _np  # alias to avoid shadow
@@ -116,8 +109,9 @@ async def verify_signature(
             v2 = aug.augment_image(base_np, is_genuine=True)
             v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
             v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-            embeddings.append(embed_pil(v1_pil))
-            embeddings.append(embed_pil(v2_pil))
+            # FIXED: Use same preprocessing pipeline
+            embeddings.append(model_manager.embed_images([v1_pil])[0])
+            embeddings.append(model_manager.embed_images([v2_pil])[0])
         except Exception:
             pass
         test_embedding = np.mean(np.stack(embeddings, axis=0), axis=0)
@@ -132,18 +126,13 @@ async def verify_signature(
             raise HTTPException(status_code=400, detail="Prototype not available for this model")
 
         dist = float(np.linalg.norm(test_embedding - centroid))
-        
-        # TEMPORARY FIX: Make threshold more lenient for testing
-        # Multiply threshold by 2 to be more permissive
-        adjusted_threshold = threshold * 2.0
-        
-        is_genuine = dist <= adjusted_threshold
-        denom = adjusted_threshold if adjusted_threshold and adjusted_threshold > 1e-6 else 1.0
+        is_genuine = dist <= threshold
+        denom = threshold if threshold and threshold > 1e-6 else 1.0
         raw_score = 1.0 - dist / denom
         score = float(max(0.0, min(1.0, raw_score)))
         
         # Log the values for debugging
-        logger.info(f"Verification debug - Distance: {dist:.4f}, Original threshold: {threshold:.4f}, Adjusted threshold: {adjusted_threshold:.4f}, Is genuine: {is_genuine}")
+        logger.info(f"Verification debug - Distance: {dist:.4f}, Threshold: {threshold:.4f}, Is genuine: {is_genuine}")
 
         # Generate spoofing warning message
         spoofing_warning = spoofing_detector.get_spoofing_warning_message(spoofing_analysis)
@@ -247,14 +236,8 @@ async def identify_signature_owner(
                         continue
 
                 # Embed with TTA
-                def embed_pil(img_pil: Image.Image):
-                    arr = np.array(img_pil)
-                    tensor = tf.convert_to_tensor(arr)
-                    tensor = model_manager.preprocess_image(tensor)
-                    tensor = tf.expand_dims(tensor, axis=0)
-                    return model_manager.embedding_model.predict(tensor, verbose=0)[0]
-
-                embeddings = [embed_pil(test_processed)]
+                # FIXED: Use the same preprocessing pipeline as training
+                embeddings = [model_manager.embed_images([test_processed])[0]]
                 try:
                     aug = SignatureAugmentation(rotation_range=8.0, scale_range=(0.95, 1.05), brightness_range=0.1, blur_probability=0.15, thickness_variation=0.08)
                     import numpy as _np
@@ -263,8 +246,9 @@ async def identify_signature_owner(
                     v2 = aug.augment_image(base_np, is_genuine=True)
                     v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
                     v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-                    embeddings.append(embed_pil(v1_pil))
-                    embeddings.append(embed_pil(v2_pil))
+                    # FIXED: Use same preprocessing pipeline
+                    embeddings.append(model_manager.embed_images([v1_pil])[0])
+                    embeddings.append(model_manager.embed_images([v2_pil])[0])
                 except Exception:
                     pass
                 test_embedding = np.mean(np.stack(embeddings, axis=0), axis=0)
@@ -278,14 +262,10 @@ async def identify_signature_owner(
                     threshold = 0.7
 
                 dist = float(np.linalg.norm(test_embedding - centroid))
-                
-                # TEMPORARY FIX: Make threshold more lenient for testing
-                adjusted_threshold = threshold * 2.0
-                
-                denom = adjusted_threshold if adjusted_threshold and adjusted_threshold > 1e-6 else 1.0
+                denom = threshold if threshold and threshold > 1e-6 else 1.0
                 raw_score = 1.0 - dist / denom
                 score = float(max(0.0, min(1.0, raw_score)))
-                is_match = dist <= adjusted_threshold
+                is_match = dist <= threshold
 
                 if score > best_score:
                     best_score = score
