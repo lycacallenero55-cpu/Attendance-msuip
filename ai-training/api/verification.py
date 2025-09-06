@@ -368,7 +368,14 @@ async def identify_signature_owner(
         logger.info(f"🔍 Confidence Analysis:")
         logger.info(f"   Best score: {best_score:.4f} (min required: {MIN_CONFIDENCE_SCORE})")
         logger.info(f"   Is match: {best_is_match}")
-        logger.info(f"   Distance/threshold ratio: {(best_distance/best_threshold):.4f if best_distance and best_threshold else 'N/A'} (max allowed: {MAX_DISTANCE_RATIO})")
+        
+        # Calculate distance/threshold ratio safely
+        if best_distance is not None and best_threshold is not None and best_threshold != 0:
+            distance_ratio = best_distance / best_threshold
+            logger.info(f"   Distance/threshold ratio: {distance_ratio:.4f} (max allowed: {MAX_DISTANCE_RATIO})")
+        else:
+            logger.info(f"   Distance/threshold ratio: N/A (max allowed: {MAX_DISTANCE_RATIO})")
+        
         logger.info(f"   Is confident match: {is_confident_match}")
         
         # If not confident enough, return "unknown signature"
