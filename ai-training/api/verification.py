@@ -294,7 +294,8 @@ async def identify_signature_owner(
 
         # For each model, load its embedding model and compute score against its centroid (with light TTA)
         logger.info(f"🔍 Testing against {len(candidates)} trained models...")
-        logger.info(f"🔍 Candidate models: {[{'id': m.get('id'), 'student_id': m.get('student_id'), 'status': m.get('status')} for m in candidates]}")
+        candidate_info = [{'id': m.get('id'), 'student_id': m.get('student_id'), 'status': m.get('status')} for m in candidates]
+        logger.info(f"🔍 Candidate models: {candidate_info}")
         
         for i, model in enumerate(candidates):
             logger.info(f"Testing model {i+1}/{len(candidates)}: ID {model.get('id')}, Student ID {model.get('student_id')}")

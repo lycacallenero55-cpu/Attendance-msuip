@@ -133,24 +133,31 @@ class SignatureVerificationModel:
         # Use Adam optimizer with weight decay for regularization
         optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, weight_decay=1e-3)
         
-        # Use contrastive loss for better signature discrimination
-        def contrastive_loss(y_true, y_pred):
-            margin = 1.0
+        # Use binary crossentropy with focal loss for better handling of difficult cases
+        def focal_loss(y_true, y_pred, alpha=0.25, gamma=2.0):
+            """
+            Focal loss for addressing class imbalance and difficult examples
+            """
             y_true = tf.cast(y_true, tf.float32)
             y_pred = tf.cast(y_pred, tf.float32)
             
-            # For positive pairs (same signature), minimize distance
-            positive_loss = y_true * tf.square(y_pred)
+            # Compute binary crossentropy
+            bce = keras.losses.binary_crossentropy(y_true, y_pred)
             
-            # For negative pairs (different signatures), maximize distance with margin
-            negative_loss = (1 - y_true) * tf.square(tf.maximum(margin - y_pred, 0))
+            # Compute focal weight
+            p_t = tf.where(tf.equal(y_true, 1), y_pred, 1 - y_pred)
+            alpha_t = tf.where(tf.equal(y_true, 1), alpha, 1 - alpha)
+            focal_weight = alpha_t * tf.pow(1 - p_t, gamma)
             
-            return tf.reduce_mean(positive_loss + negative_loss)
+            # Apply focal weight
+            focal_loss = focal_weight * bce
+            
+            return tf.reduce_mean(focal_loss)
         
         # Custom metrics including AUC-ROC and AUC-PR
         model.compile(
             optimizer=optimizer,
-            loss=contrastive_loss,  # Use contrastive loss instead of binary crossentropy
+            loss=focal_loss,  # Use focal loss for better handling of difficult cases
             metrics=[
                 'accuracy',
                 keras.metrics.Precision(name='precision'),
@@ -432,31 +439,27 @@ class SignatureVerificationModel:
         genuine_indices = np.where(labels == True)[0]
         forged_indices = np.where(labels == False)[0]
     
-        # Genuine pairs
+        # Genuine pairs - FEWER pairs to avoid overfitting
         for i in range(len(genuine_indices)):
-            for j in range(i + 1, min(i + 3, len(genuine_indices))):  # Limit pairs per image
+            for j in range(i + 1, min(i + 2, len(genuine_indices))):  # Reduced from 3 to 2
                 idx1, idx2 = genuine_indices[i], genuine_indices[j]
                 pairs.append([images[idx1], images[idx2]])
                 pair_labels.append(1)  # Similar
-    
-        # Forged pairs - IMPROVED: Only label as different if they're from different forgers
-        # For now, assume all forged signatures are from different people (label as 0)
-        # TODO: In future, track forger identity to make this more sophisticated
-        for i in range(len(forged_indices)):
-            for j in range(i + 1, min(i + 2, len(forged_indices))):  # Limit pairs per image
-                idx1, idx2 = forged_indices[i], forged_indices[j]
-                pairs.append([images[idx1], images[idx2]])
-                # Assume different forgers = different signatures (label as 0)
-                # If same forger, would be label 1, but we don't track forger identity yet
-                pair_labels.append(0)  # Different signatures (different forgers)
-    
-        # Generate negative pairs (different classes)
-        for i in range(min(len(genuine_indices), len(forged_indices))):
-            for j in range(min(2, len(forged_indices))):  # Limit negative pairs
+        
+        # Generate negative pairs (genuine-forged) - MORE pairs for better discrimination
+        for i in range(len(genuine_indices)):
+            for j in range(min(4, len(forged_indices))):  # Increased from 2 to 4
                 genuine_idx = genuine_indices[i]
                 forged_idx = forged_indices[j]
                 pairs.append([images[genuine_idx], images[forged_idx]])
-                pair_labels.append(0)  # Different
+                pair_labels.append(0)  # Different (genuine vs forged)
+        
+        # Forged pairs - fewer pairs
+        for i in range(len(forged_indices)):
+            for j in range(i + 1, min(i + 2, len(forged_indices))):  # Keep same
+                idx1, idx2 = forged_indices[i], forged_indices[j]
+                pairs.append([images[idx1], images[idx2]])
+                pair_labels.append(0)  # Different signatures (different forgers)
     
         # Convert to numpy arrays with consistent dtype
         pairs = np.stack(pairs, axis=0).astype(np.float32)
