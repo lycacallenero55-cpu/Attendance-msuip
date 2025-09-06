@@ -200,7 +200,8 @@ class SignatureVerificationModel:
     def evaluate_model_comprehensive(self, genuine_images: List, forged_images: List, 
                                    threshold: float = None) -> dict:
         """Comprehensive model evaluation with multiple metrics"""
-        # Manual implementation without sklearn dependency
+        from sklearn.metrics import roc_auc_score, roc_curve, precision_recall_curve, auc
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
         
         # Get embeddings
         genuine_embeddings = self.embed_images(genuine_images)
@@ -536,23 +537,15 @@ class SignatureVerificationModel:
         """Train with augmented data using enhanced callbacks and strategies"""
         try:
             # CRITICAL FIX: Split data BEFORE augmentation to prevent data leakage
-            # Manual train/validation split without sklearn dependency
-            np.random.seed(42)
-            indices = np.arange(len(all_images))
-            np.random.shuffle(indices)
+            from sklearn.model_selection import train_test_split
             
-            # Calculate split point
-            split_point = int(len(all_images) * (1 - validation_split))
-            
-            # Split indices
-            train_indices = indices[:split_point]
-            val_indices = indices[split_point:]
-            
-            # Split data
-            train_images = [all_images[i] for i in train_indices]
-            train_labels = [all_labels[i] for i in train_indices]
-            val_images = [all_images[i] for i in val_indices]
-            val_labels = [all_labels[i] for i in val_indices]
+            # Split original images into train/validation
+            train_images, val_images, train_labels, val_labels = train_test_split(
+                all_images, all_labels, 
+                test_size=validation_split, 
+                random_state=42,
+                stratify=all_labels
+            )
             
             logger.info(f"Data split: {len(train_images)} train, {len(val_images)} validation")
             logger.info(f"Train labels: {np.sum(train_labels)} genuine, {len(train_labels) - np.sum(train_labels)} forged")
