@@ -283,6 +283,8 @@ async def identify_signature_owner(
 
         # For each model, load its embedding model and compute score against its centroid (with light TTA)
         logger.info(f"🔍 Testing against {len(candidates)} trained models...")
+        logger.info(f"🔍 Candidate models: {[{'id': m.get('id'), 'student_id': m.get('student_id'), 'status': m.get('status')} for m in candidates]}")
+        
         for i, model in enumerate(candidates):
             logger.info(f"Testing model {i+1}/{len(candidates)}: ID {model.get('id')}, Student ID {model.get('student_id')}")
             try:
@@ -293,12 +295,13 @@ async def identify_signature_owner(
                 model_path = model.get("model_path")
                 embedding_path = model.get("embedding_model_path")
                 
+                logger.info(f"🔍 Loading model {model_id}: path={model_path}, embedding_path={embedding_path}")
                 cached_model = await model_cache.get_model(model_id, model_path, embedding_path)
                 if cached_model:
                     model_manager.embedding_model = cached_model
                     logger.info(f"✅ Model {model.get('id')} loaded from cache")
                 else:
-                    logger.warning(f"Could not load model {model.get('id')}")
+                    logger.warning(f"❌ Could not load model {model.get('id')}")
                     continue
 
                 # Embed without TTA for faster identification
@@ -322,7 +325,10 @@ async def identify_signature_owner(
                 score = float(max(0.0, min(1.0, score)))
                 is_match = dist <= threshold
 
+                logger.info(f"📊 Model {model.get('id')} (Student {model.get('student_id')}): dist={dist:.4f}, threshold={threshold:.4f}, score={score:.4f}, is_match={is_match}")
+
                 if score > best_score:
+                    logger.info(f"🏆 New best model: {model.get('id')} (Student {model.get('student_id')}) with score {score:.4f}")
                     best_score = score
                     best = {
                         "distance": dist,
@@ -340,6 +346,8 @@ async def identify_signature_owner(
 
         if best is None or best_model is None:
             raise HTTPException(status_code=404, detail="Could not identify signature owner")
+
+        logger.info(f"🎯 Final result: Best model {best_model.get('id')} (Student {best_model.get('student_id')}) with score {best_score:.4f}")
 
         # Lookup student info
         student = await db_manager.get_student(int(best_model["student_id"]))
