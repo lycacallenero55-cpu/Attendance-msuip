@@ -84,9 +84,22 @@ class SignatureVerificationModel:
         embedding_a = embedding_network(input_a)
         embedding_b = embedding_network(input_b)
         
-        # Use simple concatenation instead of complex distance metrics
-        # This avoids Lambda layers that cause serialization issues
-        merged = layers.Concatenate()([embedding_a, embedding_b])
+        # Apply manual L2 normalization after embedding
+        embedding_a = tf.nn.l2_normalize(embedding_a, axis=1)
+        embedding_b = tf.nn.l2_normalize(embedding_b, axis=1)
+        
+        # Compute distance-based features for better discrimination
+        # L2 distance (Euclidean)
+        l2_distance = tf.sqrt(tf.reduce_sum(tf.square(embedding_a - embedding_b), axis=1, keepdims=True))
+        
+        # Cosine distance
+        cosine_distance = 1 - tf.reduce_sum(embedding_a * embedding_b, axis=1, keepdims=True)
+        
+        # Absolute difference
+        abs_diff = tf.reduce_sum(tf.abs(embedding_a - embedding_b), axis=1, keepdims=True)
+        
+        # Combine distance features
+        merged = layers.Concatenate()([l2_distance, cosine_distance, abs_diff])
         
         # Balanced classification head for better discrimination
         output = layers.Dense(128, activation='relu')(merged)  # Increased for better discrimination
@@ -102,14 +115,27 @@ class SignatureVerificationModel:
         # Create the model
         model = keras.Model(inputs=[input_a, input_b], outputs=output, name='signature_verification')
         
-        # Use simple Adam optimizer
-        # Compile model with weight decay for regularization
-        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, weight_decay=1e-3)  # Balanced weight decay
+        # Use Adam optimizer with weight decay for regularization
+        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, weight_decay=1e-3)
+        
+        # Use contrastive loss for better signature discrimination
+        def contrastive_loss(y_true, y_pred):
+            margin = 1.0
+            y_true = tf.cast(y_true, tf.float32)
+            y_pred = tf.cast(y_pred, tf.float32)
+            
+            # For positive pairs (same signature), minimize distance
+            positive_loss = y_true * tf.square(y_pred)
+            
+            # For negative pairs (different signatures), maximize distance with margin
+            negative_loss = (1 - y_true) * tf.square(tf.maximum(margin - y_pred, 0))
+            
+            return tf.reduce_mean(positive_loss + negative_loss)
         
         # Custom metrics including AUC-ROC and AUC-PR
         model.compile(
             optimizer=optimizer,
-            loss='binary_crossentropy',
+            loss=contrastive_loss,  # Use contrastive loss instead of binary crossentropy
             metrics=[
                 'accuracy',
                 keras.metrics.Precision(name='precision'),
