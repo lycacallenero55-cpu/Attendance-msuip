@@ -126,13 +126,26 @@ async def start_training(
             history = model_manager.train_with_augmented_data(all_images, all_labels)
 
             # CRITICAL FIX: Split data for proper threshold computation
-            from sklearn.model_selection import train_test_split
+            # Manual train/validation split without sklearn dependency
+            np.random.seed(42)
             
-            # Split into train/validation for threshold computation
-            train_genuine, val_genuine, train_forged, val_forged = train_test_split(
-                genuine_images, forged_images if forged_images else [],
-                test_size=0.2, random_state=42
-            )
+            # Split genuine images
+            genuine_indices = np.arange(len(genuine_images))
+            np.random.shuffle(genuine_indices)
+            genuine_split = int(len(genuine_images) * 0.8)
+            train_genuine = [genuine_images[i] for i in genuine_indices[:genuine_split]]
+            val_genuine = [genuine_images[i] for i in genuine_indices[genuine_split:]]
+            
+            # Split forged images
+            if forged_images:
+                forged_indices = np.arange(len(forged_images))
+                np.random.shuffle(forged_indices)
+                forged_split = int(len(forged_images) * 0.8)
+                train_forged = [forged_images[i] for i in forged_indices[:forged_split]]
+                val_forged = [forged_images[i] for i in forged_indices[forged_split:]]
+            else:
+                train_forged = []
+                val_forged = []
             
             # Compute prototype (centroid) from training genuine samples, threshold from validation data
             centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
@@ -405,11 +418,26 @@ async def run_async_training(job, student, genuine_data, forged_data):
         job_queue.update_job_progress(job.job_id, 80.0, "Computing prototype and threshold...")
         
         # Split into train/validation for threshold computation
-        from sklearn.model_selection import train_test_split
-        train_genuine, val_genuine, train_forged, val_forged = train_test_split(
-            genuine_images, forged_images if forged_images else [],
-            test_size=0.2, random_state=42
-        )
+        # Manual train/validation split without sklearn dependency
+        np.random.seed(42)
+        
+        # Split genuine images
+        genuine_indices = np.arange(len(genuine_images))
+        np.random.shuffle(genuine_indices)
+        genuine_split = int(len(genuine_images) * 0.8)
+        train_genuine = [genuine_images[i] for i in genuine_indices[:genuine_split]]
+        val_genuine = [genuine_images[i] for i in genuine_indices[genuine_split:]]
+        
+        # Split forged images
+        if forged_images:
+            forged_indices = np.arange(len(forged_images))
+            np.random.shuffle(forged_indices)
+            forged_split = int(len(forged_images) * 0.8)
+            train_forged = [forged_images[i] for i in forged_indices[:forged_split]]
+            val_forged = [forged_images[i] for i in forged_indices[forged_split:]]
+        else:
+            train_forged = []
+            val_forged = []
         
         centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
             train_genuine,
