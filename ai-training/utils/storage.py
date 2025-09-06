@@ -59,6 +59,28 @@ async def download_from_supabase(supabase_path: str) -> str:
         logger.error(f"Error downloading from Supabase: {e}")
         raise
 
+async def load_model_from_supabase(supabase_path: str):
+    """Load a model directly from Supabase Storage into memory without saving to disk"""
+    try:
+        response = supabase.storage.from_(settings.SUPABASE_BUCKET).download(supabase_path)
+        
+        if response is None:
+            raise Exception("Download failed: No data received")
+        
+        # Load model directly from bytes using io.BytesIO
+        import io
+        from tensorflow import keras
+        
+        model_bytes = io.BytesIO(response)
+        model = keras.models.load_model(model_bytes)
+        
+        logger.info(f"Model loaded directly from Supabase: {supabase_path}")
+        return model
+    
+    except Exception as e:
+        logger.error(f"Error loading model from Supabase: {e}")
+        raise
+
 def cleanup_local_file(file_path: str):
     """Clean up a local file"""
     try:

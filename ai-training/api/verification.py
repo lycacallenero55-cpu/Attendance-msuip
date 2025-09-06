@@ -12,7 +12,7 @@ import tensorflow as tf
 from tensorflow import keras
 from models.signature_model import SignatureVerificationModel
 from utils.image_processing import validate_image, preprocess_image
-from utils.storage import download_from_supabase
+from utils.storage import download_from_supabase, load_model_from_supabase
 from utils.antispoofing import AntiSpoofingDetector
 from services.model_versioning import model_versioning_service
 from services.model_cache import model_cache
@@ -28,22 +28,16 @@ async def load_signature_model(model):
     embedding_path = model.get("embedding_model_path")
     if embedding_path:
         try:
-            logger.info(f"🔄 Loading embedding model from: {embedding_path}")
-            # Download from Supabase to temporary file (not persistent local storage)
+            logger.info(f"🔄 Loading embedding model directly from Supabase: {embedding_path}")
+            # Load model directly from Supabase without downloading to disk
             if embedding_path.startswith("models/"):
-                from utils.storage import download_from_supabase
-                temp_path = await download_from_supabase(embedding_path)
-                embedding_path = temp_path
+                model_manager.embedding_model = await load_model_from_supabase(embedding_path)
+            else:
+                model_manager.embedding_model = keras.models.load_model(embedding_path)
             
-            model_manager.embedding_model = keras.models.load_model(embedding_path)
             logger.info("✅ Embedding model loaded successfully")
             logger.info(f"Embedding model input shape: {model_manager.embedding_model.input_shape}")
             logger.info(f"Embedding model output shape: {model_manager.embedding_model.output_shape}")
-            
-            # Clean up temporary file if it was downloaded
-            if embedding_path.startswith("/tmp/"):
-                from utils.storage import cleanup_local_file
-                cleanup_local_file(embedding_path)
         except Exception as e:
             logger.warning(f"Failed to load embedding model: {e}")
             embedding_path = None
@@ -52,21 +46,15 @@ async def load_signature_model(model):
     if not embedding_path or not hasattr(model_manager, 'embedding_model'):
         try:
             model_path = model.get("model_path")
-            # Download from Supabase to temporary file (not persistent local storage)
+            logger.info(f"🔄 Loading full model directly from Supabase: {model_path}")
+            # Load model directly from Supabase without downloading to disk
             if model_path.startswith("models/"):
-                from utils.storage import download_from_supabase
-                temp_path = await download_from_supabase(model_path)
-                model_path = temp_path
+                model_manager.model = await load_model_from_supabase(model_path)
+            else:
+                model_manager.model = keras.models.load_model(model_path)
             
-            logger.info(f"🔄 Loading full model from: {model_path}")
-            model_manager.model = keras.models.load_model(model_path)
             model_manager.embedding_model = model_manager.model.get_layer('embedding_model')
             logger.info("✅ Full model loaded successfully")
-            
-            # Clean up temporary file if it was downloaded
-            if model_path.startswith("/tmp/"):
-                from utils.storage import cleanup_local_file
-                cleanup_local_file(model_path)
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
