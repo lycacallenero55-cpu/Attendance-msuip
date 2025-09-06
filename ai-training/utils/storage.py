@@ -67,15 +67,24 @@ async def load_model_from_supabase(supabase_path: str):
         if response is None:
             raise Exception("Download failed: No data received")
         
-        # Load model directly from bytes using io.BytesIO
-        import io
+        # Use temporary file with immediate cleanup
+        import tempfile
+        import os
         from tensorflow import keras
         
-        model_bytes = io.BytesIO(response)
-        model = keras.models.load_model(model_bytes)
+        # Create a temporary file with the correct extension
+        suffix = '.keras' if supabase_path.endswith('.keras') else '.h5'
         
-        logger.info(f"Model loaded directly from Supabase: {supabase_path}")
-        return model
+        # Use context manager to ensure cleanup
+        with tempfile.NamedTemporaryFile(delete=True, suffix=suffix) as temp_file:
+            temp_file.write(response)
+            temp_file.flush()  # Ensure data is written
+            
+            # Load model from temporary file
+            model = keras.models.load_model(temp_file.name)
+            
+            logger.info(f"Model loaded directly from Supabase: {supabase_path}")
+            return model
     
     except Exception as e:
         logger.error(f"Error loading model from Supabase: {e}")
