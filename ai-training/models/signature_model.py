@@ -84,19 +84,34 @@ class SignatureVerificationModel:
         embedding_a = embedding_network(input_a)
         embedding_b = embedding_network(input_b)
         
-        # Apply manual L2 normalization after embedding
-        embedding_a = tf.nn.l2_normalize(embedding_a, axis=1)
-        embedding_b = tf.nn.l2_normalize(embedding_b, axis=1)
+        # Custom layers for distance computation to avoid KerasTensor issues
+        class L2NormalizeLayer(layers.Layer):
+            def call(self, inputs):
+                return tf.nn.l2_normalize(inputs, axis=1)
+        
+        class L2DistanceLayer(layers.Layer):
+            def call(self, inputs):
+                a, b = inputs
+                return tf.sqrt(tf.reduce_sum(tf.square(a - b), axis=1, keepdims=True))
+        
+        class CosineDistanceLayer(layers.Layer):
+            def call(self, inputs):
+                a, b = inputs
+                return 1 - tf.reduce_sum(a * b, axis=1, keepdims=True)
+        
+        class AbsDiffLayer(layers.Layer):
+            def call(self, inputs):
+                a, b = inputs
+                return tf.reduce_sum(tf.abs(a - b), axis=1, keepdims=True)
+        
+        # Apply L2 normalization
+        embedding_a = L2NormalizeLayer()(embedding_a)
+        embedding_b = L2NormalizeLayer()(embedding_b)
         
         # Compute distance-based features for better discrimination
-        # L2 distance (Euclidean)
-        l2_distance = tf.sqrt(tf.reduce_sum(tf.square(embedding_a - embedding_b), axis=1, keepdims=True))
-        
-        # Cosine distance
-        cosine_distance = 1 - tf.reduce_sum(embedding_a * embedding_b, axis=1, keepdims=True)
-        
-        # Absolute difference
-        abs_diff = tf.reduce_sum(tf.abs(embedding_a - embedding_b), axis=1, keepdims=True)
+        l2_distance = L2DistanceLayer()([embedding_a, embedding_b])
+        cosine_distance = CosineDistanceLayer()([embedding_a, embedding_b])
+        abs_diff = AbsDiffLayer()([embedding_a, embedding_b])
         
         # Combine distance features
         merged = layers.Concatenate()([l2_distance, cosine_distance, abs_diff])
