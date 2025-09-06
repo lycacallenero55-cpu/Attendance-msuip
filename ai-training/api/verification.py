@@ -15,6 +15,56 @@ from utils.storage import download_from_supabase
 from utils.antispoofing import AntiSpoofingDetector
 from services.model_versioning import model_versioning_service
 from config import settings
+
+async def load_signature_model(model):
+    """
+    Unified model loading helper for both verify and identify endpoints
+    """
+    model_manager = SignatureVerificationModel()
+    
+    # Try to load embedding-only model first (lighter/faster)
+    embedding_path = model.get("embedding_model_path")
+    if embedding_path:
+        try:
+            logger.info(f"🔄 Loading embedding model from: {embedding_path}")
+            # Download from Supabase if needed
+            if embedding_path.startswith("models/"):
+                local_path = os.path.join(settings.LOCAL_MODELS_DIR, os.path.basename(embedding_path))
+                if not os.path.exists(local_path):
+                    # Download from Supabase
+                    from utils.storage import download_from_supabase
+                    await download_from_supabase(embedding_path, local_path)
+                embedding_path = local_path
+            
+            model_manager.embedding_model = keras.models.load_model(embedding_path)
+            logger.info("✅ Embedding model loaded successfully")
+            logger.info(f"Embedding model input shape: {model_manager.embedding_model.input_shape}")
+            logger.info(f"Embedding model output shape: {model_manager.embedding_model.output_shape}")
+        except Exception as e:
+            logger.warning(f"Failed to load embedding model: {e}")
+            embedding_path = None
+    
+    # Fallback to full model if embedding model failed
+    if not embedding_path or not hasattr(model_manager, 'embedding_model'):
+        try:
+            model_path = model.get("model_path")
+            if model_path.startswith("models/"):
+                local_path = os.path.join(settings.LOCAL_MODELS_DIR, os.path.basename(model_path))
+                if not os.path.exists(local_path):
+                    # Download from Supabase
+                    from utils.storage import download_from_supabase
+                    await download_from_supabase(model_path, local_path)
+                model_path = local_path
+            
+            logger.info(f"🔄 Loading full model from: {model_path}")
+            model_manager.model = keras.models.load_model(model_path)
+            model_manager.embedding_model = model_manager.model.get_layer('embedding_model')
+            logger.info("✅ Full model loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}")
+            raise HTTPException(status_code=400, detail="Model artifact is from an old version. Please retrain this student and try again.")
+    
+    return model_manager
 from utils.augmentation import SignatureAugmentation
 
 router = APIRouter()
@@ -294,11 +344,13 @@ async def identify_signature_owner(
                     base_np = _np.array(test_processed.convert('L'))
                     v1 = aug.augment_image(base_np, is_genuine=True)
                     v2 = aug.augment_image(base_np, is_genuine=True)
-                    v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-                    v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
-                    # FIXED: Use same preprocessing pipeline
-                    embeddings.append(model_manager.embed_images([v1_pil])[0])
-                    embeddings.append(model_manager.embed_images([v2_pil])[0])
+            v1_pil = Image.fromarray(v1).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
+            v2_pil = Image.fromarray(v2).convert('RGB').resize((settings.MODEL_IMAGE_SIZE, settings.MODEL_IMAGE_SIZE), Image.Resampling.LANCZOS)
+            # FIXED: Use same preprocessing pipeline for consistency
+            v1_processed = preprocess_image(v1_pil, settings.MODEL_IMAGE_SIZE)
+            v2_processed = preprocess_image(v2_pil, settings.MODEL_IMAGE_SIZE)
+            embeddings.append(model_manager.embed_images([v1_processed])[0])
+            embeddings.append(model_manager.embed_images([v2_processed])[0])
                 except Exception:
                     pass
                 test_embedding = np.mean(np.stack(embeddings, axis=0), axis=0)

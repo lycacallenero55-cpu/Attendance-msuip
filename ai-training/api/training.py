@@ -25,6 +25,185 @@ logger = logging.getLogger(__name__)
 # Global model instance
 model_manager = SignatureVerificationModel()
 
+async def train_signature_model(student, genuine_data, forged_data, job=None):
+    """
+    Unified training function for both sync and async routes
+    """
+    try:
+        # Process and validate images
+        genuine_images = []
+        forged_images = []
+        
+        # Process genuine images
+        for i, data in enumerate(genuine_data):
+            image = Image.open(io.BytesIO(data))
+            processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
+            genuine_images.append(processed_image)
+            
+            # Update progress if job provided
+            if job:
+                progress = 5.0 + (i + 1) / len(genuine_data) * 15.0
+                job_queue.update_job_progress(job.job_id, progress, f"Processing genuine images... {i+1}/{len(genuine_data)}")
+        
+        # Process forged images
+        for i, data in enumerate(forged_data):
+            image = Image.open(io.BytesIO(data))
+            processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
+            forged_images.append(processed_image)
+            
+            # Update progress if job provided
+            if job:
+                progress = 20.0 + (i + 1) / len(forged_data) * 15.0
+                job_queue.update_job_progress(job.job_id, progress, f"Processing forged images... {i+1}/{len(forged_data)}")
+        
+        # Apply moderate data augmentation
+        if job:
+            job_queue.update_job_progress(job.job_id, 35.0, "Applying moderate data augmentation...")
+        
+        augmenter = SignatureAugmentation(
+            rotation_range=15.0,
+            scale_range=(0.9, 1.1),
+            brightness_range=0.3,
+            blur_probability=0.3,
+            thickness_variation=0.1,
+            elastic_alpha=8.0,
+            elastic_sigma=4.0,
+            noise_stddev=5.0,
+            shear_range=0.2,
+            perspective_distortion=0.03,
+            camera_tilt_range=10.0,
+            lighting_angle_range=20.0
+        )
+        
+        genuine_augmented, genuine_labels = augmenter.augment_batch(
+            genuine_images, [True] * len(genuine_images), augmentation_factor=3
+        )
+        
+        forged_augmented, forged_labels = augmenter.augment_batch(
+            forged_images, [False] * len(forged_images), augmentation_factor=2
+        )
+        
+        all_images = genuine_augmented + forged_augmented
+        all_labels = genuine_labels + forged_labels
+        
+        # Create model record in database
+        if job:
+            job_queue.update_job_progress(job.job_id, 40.0, "Creating model record...")
+        
+        model_uuid = str(uuid.uuid4())
+        model_data = {
+            "student_id": int(student["id"]),
+            "model_path": f"models/{model_uuid}.keras",
+            "status": "training",
+            "sample_count": len(genuine_images) + len(forged_images),
+            "genuine_count": len(genuine_images),
+            "forged_count": len(forged_images),
+            "training_date": datetime.utcnow().isoformat()
+        }
+        created = await db_manager.create_trained_model(model_data)
+        numeric_model_id = created["id"] if isinstance(created, dict) else None
+        
+        # Start training
+        if job:
+            job_queue.update_job_progress(job.job_id, 45.0, "Initializing AI model...")
+        
+        model_manager = SignatureVerificationModel()
+        
+        if job:
+            job_queue.update_job_progress(job.job_id, 50.0, "Training AI model...")
+        
+        t0 = time.time()
+        history = model_manager.train_with_augmented_data(all_images, all_labels)
+        
+        # Compute prototype and threshold
+        if job:
+            job_queue.update_job_progress(job.job_id, 80.0, "Computing prototype and threshold...")
+        
+        # Split into train/validation for threshold computation
+        from sklearn.model_selection import train_test_split
+        train_genuine, val_genuine = train_test_split(
+            genuine_images, test_size=0.2, random_state=42
+        )
+        if forged_images:
+            train_forged, val_forged = train_test_split(
+                forged_images, test_size=0.2, random_state=42
+            )
+        else:
+            train_forged, val_forged = [], []
+        
+        centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
+            train_genuine,
+            train_forged if len(train_forged) > 0 else None,
+            val_genuine,
+            val_forged if len(val_forged) > 0 else None
+        )
+        
+        # Save models
+        if job:
+            job_queue.update_job_progress(job.job_id, 85.0, "Saving model...")
+        
+        local_model_path = os.path.join(settings.LOCAL_MODELS_DIR, f"{model_uuid}.keras")
+        local_embed_path = os.path.join(settings.LOCAL_MODELS_DIR, f"{model_uuid}_embed.keras")
+        
+        model_manager.save_model(local_model_path)
+        model_manager.save_embedding_model(local_embed_path)
+        
+        # Upload to Supabase
+        if job:
+            job_queue.update_job_progress(job.job_id, 90.0, "Uploading to cloud storage...")
+        
+        remote_model_path = await save_to_supabase(local_model_path, f"models/{model_uuid}.keras")
+        remote_embed_path = await save_to_supabase(local_embed_path, f"models/{model_uuid}_embed.keras")
+        
+        # Update model metadata
+        if numeric_model_id:
+            await db_manager.update_model_metadata(numeric_model_id, {
+                "status": "completed",
+                "accuracy": float(history.history.get("val_accuracy", [0])[-1]),
+                "prototype_centroid": centroid if isinstance(centroid, list) else centroid.tolist(),
+                "prototype_threshold": float(threshold),
+                "embedding_model_path": remote_embed_path,
+                "model_path": remote_model_path
+            })
+        
+        # Cleanup local files
+        cleanup_local_file(local_model_path)
+        cleanup_local_file(local_embed_path)
+        
+        # Calculate training metrics
+        train_time = time.time() - t0
+        val_accuracy = history.history.get("val_accuracy", [0])[-1]
+        precision = history.history.get("val_precision", [0])[-1] if "val_precision" in history.history else 0
+        recall = history.history.get("val_recall", [0])[-1] if "val_recall" in history.history else 0
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        
+        result = {
+            "success": True,
+            "model_id": numeric_model_id,
+            "model_uuid": model_uuid,
+            "accuracy": float(history.history.get("accuracy", [0])[-1]),
+            "val_accuracy": float(val_accuracy),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+            "train_time_s": float(train_time),
+            "threshold": float(threshold),
+            "training_samples": len(genuine_images) + len(forged_images),
+            "genuine_count": len(genuine_images),
+            "forged_count": len(forged_images)
+        }
+        
+        if job:
+            job_queue.complete_job(job.job_id, result)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Training failed: {e}")
+        if job:
+            job_queue.fail_job(job.job_id, str(e))
+        raise
+
 @router.post("/start")
 async def start_training(
     student_id: str = Form(...),
@@ -58,190 +237,21 @@ async def start_training(
                 detail=f"Minimum {settings.MIN_FORGED_SAMPLES} forged samples required"
             )
         
-        # Process and validate images
-        genuine_images = []
-        forged_images = []
-        
-        # Process genuine images
+        # Read file data
+        genuine_data = []
         for file in genuine_files:
-            
-            image_data = await file.read()
-            image = Image.open(io.BytesIO(image_data))
-            processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
-            genuine_images.append(processed_image)
+            data = await file.read()
+            genuine_data.append(data)
         
-        # Process forged images
+        forged_data = []
         for file in forged_files:
-            
-            image_data = await file.read()
-            image = Image.open(io.BytesIO(image_data))
-            processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
-            forged_images.append(processed_image)
+            data = await file.read()
+            forged_data.append(data)
         
-        # Apply MODERATE data augmentation for realistic variations
-        logger.info(f"Applying moderate data augmentation to {len(genuine_images)} genuine and {len(forged_images)} forged samples")
-        augmenter = SignatureAugmentation(
-            rotation_range=15.0,  # Moderate rotation for natural handwriting variation
-            scale_range=(0.9, 1.1),  # Small scale changes for zoom variations
-            brightness_range=0.3,  # Moderate brightness for lighting changes
-            blur_probability=0.3,  # Some blur for camera focus issues
-            thickness_variation=0.1,  # Small thickness changes for pen pressure
-            elastic_alpha=8.0,  # Moderate elastic distortion
-            elastic_sigma=4.0,  # Smoother distortions
-            noise_stddev=5.0,  # Light noise for camera artifacts
-            shear_range=0.2,  # Moderate perspective distortion
-            perspective_distortion=0.03,  # Small camera angle simulation
-            camera_tilt_range=10.0,  # Moderate camera tilt
-            lighting_angle_range=20.0  # Moderate lighting variations
-        )
+        # Use unified training function
+        result = await train_signature_model(student, genuine_data, forged_data)
         
-        # Augment genuine signatures moderately (3x augmentation)
-        genuine_augmented, genuine_labels = augmenter.augment_batch(
-            genuine_images, [True] * len(genuine_images), augmentation_factor=3
-        )
-        
-        # Augment forged signatures lightly (2x augmentation)
-        forged_augmented, forged_labels = augmenter.augment_batch(
-            forged_images, [False] * len(forged_images), augmentation_factor=2
-        )
-        
-        # Combine all augmented data
-        all_images = genuine_augmented + forged_augmented
-        all_labels = genuine_labels + forged_labels
-        
-        logger.info(f"After augmentation: {len(all_images)} total samples ({len(genuine_augmented)} genuine, {len(forged_augmented)} forged)")
-        
-        # Create model record in database
-        model_uuid = str(uuid.uuid4())
-        model_data = {
-            # Let DB auto-generate bigint primary key id
-            "student_id": int(student["id"]) if isinstance(student.get("id"), (int, float)) else student.get("id"),
-            "model_path": f"models/{model_uuid}.keras",
-            "status": "training",
-            "sample_count": len(genuine_images) + len(forged_images),
-            "genuine_count": len(genuine_images),
-            "forged_count": len(forged_images),
-            "training_date": datetime.utcnow().isoformat()
-        }
-        created = await db_manager.create_trained_model(model_data)
-        numeric_model_id = created["id"] if isinstance(created, dict) else None
-        
-        # Start training (this would be async in production)
-        try:
-            t0 = time.time()
-            # Train with augmented data for better robustness
-            history = model_manager.train_with_augmented_data(all_images, all_labels)
-
-            # CRITICAL FIX: Split data for proper threshold computation
-            from sklearn.model_selection import train_test_split
-            
-            # Split into train/validation for threshold computation
-            train_genuine, val_genuine, train_forged, val_forged = train_test_split(
-                genuine_images, forged_images if forged_images else [],
-                test_size=0.2, random_state=42
-            )
-            
-            # Compute prototype (centroid) from training genuine samples, threshold from validation data
-            centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
-                train_genuine, 
-                train_forged if len(train_forged) > 0 else None,
-                val_genuine,
-                val_forged if len(val_forged) > 0 else None
-            )
-            # ENHANCED: Use comprehensive evaluation with validation data
-            evaluation_metrics = model_manager.evaluate_model_comprehensive(
-                val_genuine, val_forged, threshold
-            )
-            
-            logger.info(f"Model evaluation metrics: {evaluation_metrics}")
-            logger.info(f"Computed threshold: {threshold:.4f}")
-            logger.info(f"FAR (False Acceptance Rate): {evaluation_metrics['far']:.4f}")
-            logger.info(f"FRR (False Rejection Rate): {evaluation_metrics['frr']:.4f}")
-            logger.info(f"ROC-AUC: {evaluation_metrics['roc_auc']:.4f}")
-            logger.info(f"EER: {evaluation_metrics['eer']:.4f}")
-            
-            # Extract key metrics
-            far_at_thr = evaluation_metrics['far']
-            frr_at_thr = evaluation_metrics['frr']
-            roc_auc = evaluation_metrics['roc_auc']
-            eer = evaluation_metrics['eer']
-            
-            # Get best accuracy
-            best_accuracy = max(history.history['val_accuracy'])
-            train_time_s = int(time.time() - t0)
-            best_precision = max(history.history.get('precision', [0])) if history.history.get('precision') else 0
-            best_recall = max(history.history.get('recall', [0])) if history.history.get('recall') else 0
-            f1 = (2 * best_precision * best_recall / (best_precision + best_recall)) if (best_precision + best_recall) > 0 else 0
-            
-            # Save full model (Keras format) and embedding-only model
-            local_model_path = os.path.join(settings.LOCAL_MODELS_DIR, f"{model_uuid}.keras")
-            model_manager.save_model(local_model_path)
-
-            # Save embedding-only model if available
-            embedding_local_path = None
-            if getattr(model_manager, 'embedding_model', None) is not None:
-                embedding_local_path = os.path.join(settings.LOCAL_MODELS_DIR, f"{model_uuid}_embed.keras")
-                model_manager.embedding_model.save(embedding_local_path)
-            
-            # Upload to Supabase Storage
-            supabase_path = await save_to_supabase(local_model_path, f"models/{model_uuid}.keras")
-            embedding_supabase_path = None
-            if embedding_local_path:
-                embedding_supabase_path = await save_to_supabase(embedding_local_path, f"models/{model_uuid}_embed.keras")
-            
-            # Update model record
-            await db_manager.update_model_status(
-                numeric_model_id,
-                "completed",
-                float(best_accuracy)
-            )
-            # Store prototype metadata and final artifact paths
-            await db_manager.update_model_metadata(numeric_model_id, {
-                "model_path": supabase_path,
-                "prototype_centroid": centroid,
-                "prototype_threshold": threshold,
-                "embedding_model_path": embedding_supabase_path
-            })
-            
-            # Cleanup local file
-            cleanup_local_file(local_model_path)
-            if embedding_local_path:
-                cleanup_local_file(embedding_local_path)
-            
-            return {
-                "success": True,
-                "model_id": numeric_model_id,
-                "model_uuid": model_uuid,
-                "status": "completed",
-                "accuracy": float(best_accuracy),
-                "val_accuracy": float(best_accuracy),
-                "precision": float(best_precision),
-                "recall": float(best_recall),
-                "f1": float(f1),
-                "training_samples": len(genuine_images) + len(forged_images),
-                "genuine_count": len(genuine_images),
-                "forged_count": len(forged_images),
-                "train_time_s": train_time_s,
-                "calibration": {
-                    "threshold": float(threshold),
-                    "far": float(far_at_thr),
-                    "frr": float(frr_at_thr),
-                    "roc_auc": float(roc_auc),
-                    "eer": float(eer)
-                },
-                "evaluation_metrics": evaluation_metrics,
-                "message": "Model trained successfully"
-            }
-            
-        except Exception as e:
-            # Update model status to failed
-            try:
-                if numeric_model_id is not None:
-                    await db_manager.update_model_status(numeric_model_id, "failed")
-            except Exception:
-                pass
-            logger.error(f"Training failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+        return result
     
     except HTTPException:
         raise
@@ -342,168 +352,9 @@ async def run_async_training(job, student, genuine_data, forged_data):
     """Run training job in background with progress updates."""
     try:
         job_queue.start_job(job.job_id)
-        job_queue.update_job_progress(job.job_id, 5.0, "Processing images...")
         
-        # Process and validate images
-        genuine_images = []
-        forged_images = []
-        
-        # Process genuine images (now using raw data, not file objects)
-        for i, data in enumerate(genuine_data):
-            image = Image.open(io.BytesIO(data))
-            processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
-            genuine_images.append(processed_image)
-            
-            # Update progress
-            progress = 5.0 + (i + 1) / len(genuine_data) * 15.0
-            job_queue.update_job_progress(job.job_id, progress, f"Processing genuine images... {i+1}/{len(genuine_data)}")
-        
-        # Process forged images
-        for i, data in enumerate(forged_data):
-            image = Image.open(io.BytesIO(data))
-            processed_image = preprocess_image(image, settings.MODEL_IMAGE_SIZE)
-            forged_images.append(processed_image)
-            
-            # Update progress
-            progress = 20.0 + (i + 1) / len(forged_data) * 15.0
-            job_queue.update_job_progress(job.job_id, progress, f"Processing forged images... {i+1}/{len(forged_data)}")
-        
-        # Apply MODERATE data augmentation for realistic variations
-        job_queue.update_job_progress(job.job_id, 35.0, "Applying moderate data augmentation...")
-        augmenter = SignatureAugmentation(
-            rotation_range=15.0,  # Moderate rotation for natural handwriting variation
-            scale_range=(0.9, 1.1),  # Small scale changes for zoom variations
-            brightness_range=0.3,  # Moderate brightness for lighting changes
-            blur_probability=0.3,  # Some blur for camera focus issues
-            thickness_variation=0.1,  # Small thickness changes for pen pressure
-            elastic_alpha=8.0,  # Moderate elastic distortion
-            elastic_sigma=4.0,  # Smoother distortions
-            noise_stddev=5.0,  # Light noise for camera artifacts
-            shear_range=0.2,  # Moderate perspective distortion
-            perspective_distortion=0.03,  # Small camera angle simulation
-            camera_tilt_range=10.0,  # Moderate camera tilt
-            lighting_angle_range=20.0  # Moderate lighting variations
-        )
-        
-        genuine_augmented, genuine_labels = augmenter.augment_batch(
-            genuine_images, [True] * len(genuine_images), augmentation_factor=3
-        )
-        
-        forged_augmented, forged_labels = augmenter.augment_batch(
-            forged_images, [False] * len(forged_images), augmentation_factor=2
-        )
-        
-        all_images = genuine_augmented + forged_augmented
-        all_labels = genuine_labels + forged_labels
-        
-        job_queue.update_job_progress(job.job_id, 40.0, "Creating model record...")
-        
-        # Create model record in database
-        model_uuid = str(uuid.uuid4())
-        model_data = {
-            "student_id": int(student["id"]),
-            "model_path": f"models/{model_uuid}.keras",
-            "status": "training",
-            "sample_count": len(genuine_images) + len(forged_images),
-            "genuine_count": len(genuine_images),
-            "forged_count": len(forged_images),
-            "training_date": datetime.utcnow().isoformat()
-        }
-        created = await db_manager.create_trained_model(model_data)
-        numeric_model_id = created["id"] if isinstance(created, dict) else None
-        
-        # Start training
-        job_queue.update_job_progress(job.job_id, 45.0, "Initializing AI model...")
-        model_manager = SignatureVerificationModel()
-        
-        job_queue.update_job_progress(job.job_id, 50.0, "Training AI model...")
-        t0 = time.time()
-        history = model_manager.train_with_augmented_data(all_images, all_labels)
-        
-        # FIXED: Use correct method name and proper data splitting
-        job_queue.update_job_progress(job.job_id, 80.0, "Computing prototype and threshold...")
-        
-        # FIXED: Proper validation splitting - split each class separately
-        from sklearn.model_selection import train_test_split
-        train_genuine, val_genuine = train_test_split(
-            genuine_images, test_size=0.2, random_state=42
-        )
-        if forged_images:
-            train_forged, val_forged = train_test_split(
-                forged_images, test_size=0.2, random_state=42
-            )
-        else:
-            train_forged, val_forged = [], []
-        
-        centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
-            train_genuine,
-            train_forged if len(train_forged) > 0 else None,
-            val_genuine,
-            val_forged if len(val_forged) > 0 else None
-        )
-        
-        # Calibrate threshold via EER (using the returned threshold)
-        gen_emb = model_manager.embed_images(genuine_images)
-        forg_emb = model_manager.embed_images(forged_images) if len(forged_images) else np.zeros((0, gen_emb.shape[1]))
-        centroid_vec = np.array(centroid)
-        gen_d = np.linalg.norm(gen_emb - centroid_vec, axis=1)
-        forg_d = np.linalg.norm(forg_emb - centroid_vec, axis=1) if forg_emb.size else np.array([])
-        
-        # Calculate FAR and FRR at the threshold
-        far = np.sum(forg_d <= threshold) / len(forg_d) if len(forg_d) > 0 else 0.0
-        frr = np.sum(gen_d > threshold) / len(gen_d) if len(gen_d) > 0 else 0.0
-        
-        # Save models
-        job_queue.update_job_progress(job.job_id, 85.0, "Saving model...")
-        local_model_path = os.path.join(settings.LOCAL_MODELS_DIR, f"{model_uuid}.keras")
-        local_embed_path = os.path.join(settings.LOCAL_MODELS_DIR, f"{model_uuid}_embed.keras")
-        
-        model_manager.save_model(local_model_path)
-        model_manager.save_embedding_model(local_embed_path)
-        
-        # Upload to Supabase
-        job_queue.update_job_progress(job.job_id, 90.0, "Uploading to cloud storage...")
-        remote_model_path = await save_to_supabase(local_model_path, f"models/{model_uuid}.keras")
-        remote_embed_path = await save_to_supabase(local_embed_path, f"models/{model_uuid}_embed.keras")
-        
-        # Update model metadata
-        if numeric_model_id:
-            await db_manager.update_model_metadata(numeric_model_id, {
-                "status": "completed",
-                "accuracy": float(history.history.get("val_accuracy", [0])[-1]),
-                "prototype_centroid": centroid if isinstance(centroid, list) else centroid.tolist(),
-                "prototype_threshold": float(threshold),
-                "embedding_model_path": remote_embed_path,
-                "far": float(far),
-                "frr": float(frr)
-            })
-        
-        # Cleanup local files
-        cleanup_local_file(local_model_path)
-        cleanup_local_file(local_embed_path)
-        
-        # Calculate training metrics
-        train_time = time.time() - t0
-        val_accuracy = history.history.get("val_accuracy", [0])[-1]
-        precision = history.history.get("val_precision", [0])[-1] if "val_precision" in history.history else 0
-        recall = history.history.get("val_recall", [0])[-1] if "val_recall" in history.history else 0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-        
-        result = {
-            "success": True,
-            "accuracy": float(history.history.get("accuracy", [0])[-1]),
-            "val_accuracy": float(val_accuracy),
-            "precision": float(precision),
-            "recall": float(recall),
-            "f1": float(f1),
-            "train_time_s": float(train_time),
-            "threshold": float(threshold),
-            "far": float(far),
-            "frr": float(frr),
-            "model_id": numeric_model_id
-        }
-        
-        job_queue.complete_job(job.job_id, result)
+        # Use unified training function with job for progress updates
+        result = await train_signature_model(student, genuine_data, forged_data, job)
         
     except Exception as e:
         logger.error(f"Async training failed: {e}")
