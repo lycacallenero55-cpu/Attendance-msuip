@@ -901,7 +901,9 @@ const SignatureAI = () => {
       if (result.success) {
         toast({
           title: "Verification Complete",
-          description: `Result: ${result.match ? 'Match found' : 'No match'}`,
+          description: result.is_unknown 
+            ? "Signature not recognized - owner not trained" 
+            : `Result: ${result.match ? 'Match found' : 'No match'}`,
         });
       } else {
         toast({
@@ -1511,9 +1513,17 @@ const SignatureAI = () => {
 
               {/* Verification Result */}
               {verificationResult && (
-                <Alert className={verificationResult.match ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+                <Alert className={
+                  verificationResult.is_unknown 
+                    ? "border-orange-200 bg-orange-50" 
+                    : verificationResult.match 
+                      ? "border-green-200 bg-green-50" 
+                      : "border-red-200 bg-red-50"
+                }>
                   <div className="flex items-center gap-2">
-                    {verificationResult.match ? (
+                    {verificationResult.is_unknown ? (
+                      <AlertTriangle className="w-4 h-4 text-orange-600" />
+                    ) : verificationResult.match ? (
                       <CheckCircle className="w-4 h-4 text-green-600" />
                     ) : (
                       <XCircle className="w-4 h-4 text-red-600" />
@@ -1521,14 +1531,29 @@ const SignatureAI = () => {
                     <AlertDescription>
                       <div className="space-y-2">
                         <p>
-                          <strong>Result:</strong> {verificationResult.match ? 'Match Found' : 'No Match'}
+                          <strong>Result:</strong> {
+                            verificationResult.is_unknown 
+                              ? 'Signature Not Recognized' 
+                              : verificationResult.match 
+                                ? 'Match Found' 
+                                : 'No Match'
+                          }
                         </p>
                         <p>
-                          <strong>Confidence:</strong> {(verificationResult.score * 100).toFixed(1)}%
+                          <strong>Confidence:</strong> {
+                            verificationResult.is_unknown 
+                              ? 'Low (Unknown Signature)' 
+                              : `${(verificationResult.score * 100).toFixed(1)}%`
+                          }
                         </p>
-                        {verificationResult.predicted_student && (
+                        {verificationResult.predicted_student && !verificationResult.is_unknown && (
                           <p>
                             <strong>Predicted Student:</strong> {verificationResult.predicted_student.firstname} {verificationResult.predicted_student.surname}
+                          </p>
+                        )}
+                        {verificationResult.is_unknown && (
+                          <p className="text-orange-700 font-medium">
+                            <strong>Status:</strong> Owner not trained or signature too different from trained samples
                           </p>
                         )}
                         <p className="text-sm text-muted-foreground">

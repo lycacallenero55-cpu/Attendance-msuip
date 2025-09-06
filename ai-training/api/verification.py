@@ -362,7 +362,43 @@ async def identify_signature_owner(
 
         logger.info(f"🎯 Final result: Best model {best_model.get('id')} (Student {best_model.get('student_id')}) with score {best_score:.4f}")
 
-        # Lookup student info
+        # CONFIDENCE THRESHOLDS FOR UNKNOWN SIGNATURE DETECTION
+        # These thresholds determine when a signature should be considered "unknown"
+        MIN_CONFIDENCE_SCORE = 0.6  # Minimum score to consider a match
+        MAX_DISTANCE_RATIO = 0.8    # Maximum distance/threshold ratio for genuine match
+        
+        # Check if the best match is confident enough
+        is_confident_match = (
+            best_score >= MIN_CONFIDENCE_SCORE and 
+            best_is_match and 
+            best_distance is not None and 
+            best_threshold is not None and
+            (best_distance / best_threshold) <= MAX_DISTANCE_RATIO
+        )
+        
+        logger.info(f"🔍 Confidence Analysis:")
+        logger.info(f"   Best score: {best_score:.4f} (min required: {MIN_CONFIDENCE_SCORE})")
+        logger.info(f"   Is match: {best_is_match}")
+        logger.info(f"   Distance/threshold ratio: {(best_distance/best_threshold):.4f if best_distance and best_threshold else 'N/A'} (max allowed: {MAX_DISTANCE_RATIO})")
+        logger.info(f"   Is confident match: {is_confident_match}")
+        
+        # If not confident enough, return "unknown signature"
+        if not is_confident_match:
+            logger.info("❌ Signature not recognized - confidence too low")
+            return {
+                "success": True,
+                "match": False,
+                "predicted_student_id": None,
+                "predicted_student": None,
+                "score": float(best_score),
+                "distance": float(best_distance) if best_distance is not None else None,
+                "threshold": float(best_threshold) if best_threshold is not None else None,
+                "message": "Signature not recognized - owner not trained or signature too different from trained samples",
+                "confidence": "low",
+                "is_unknown": True
+            }
+
+        # Lookup student info for confident matches only
         student = await db_manager.get_student(int(best_model["student_id"]))
         student_info = None
         if student:
@@ -373,6 +409,8 @@ async def identify_signature_owner(
                 "surname": student.get("surname"),
             }
 
+        logger.info(f"✅ Confident match found: {student_info.get('firstname', 'Unknown')} {student_info.get('surname', 'Unknown')}")
+        
         return {
             "success": True,
             "match": best_is_match,
@@ -381,7 +419,9 @@ async def identify_signature_owner(
             "score": float(best_score),
             "distance": float(best_distance) if best_distance is not None else None,
             "threshold": float(best_threshold) if best_threshold is not None else None,
-            "message": "Identified most likely owner from trained models",
+            "message": "Identified confident match from trained models",
+            "confidence": "high",
+            "is_unknown": False
         }
     except HTTPException:
         raise
