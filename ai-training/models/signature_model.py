@@ -177,6 +177,9 @@ class SignatureVerificationModel:
         """Find Equal Error Rate threshold"""
         all_dists = np.concatenate([genuine_dists, forged_dists])
         
+        logger.info(f"EER computation - Genuine distances: mean={np.mean(genuine_dists):.4f}, std={np.std(genuine_dists):.4f}")
+        logger.info(f"EER computation - Forged distances: mean={np.mean(forged_dists):.4f}, std={np.std(forged_dists):.4f}")
+        
         best_threshold = 0.5
         best_eer = 1.0
         
@@ -194,8 +197,14 @@ class SignatureVerificationModel:
                 best_eer = eer
                 best_threshold = threshold
         
+        logger.info(f"EER computation - Best threshold: {best_threshold:.4f}, EER: {best_eer:.4f}")
+        logger.info(f"EER computation - At best threshold: FAR={np.mean(forged_dists <= best_threshold):.4f}, FRR={np.mean(genuine_dists > best_threshold):.4f}")
+        
         # Add safety margin (10% buffer)
-        return float(best_threshold * 1.1)
+        final_threshold = float(best_threshold * 1.1)
+        logger.info(f"EER computation - Final threshold with margin: {final_threshold:.4f}")
+        
+        return final_threshold
     
     def evaluate_model_comprehensive(self, genuine_images: List, forged_images: List, 
                                    threshold: float = None) -> dict:

@@ -147,6 +147,11 @@ async def start_training(
             )
             
             logger.info(f"Model evaluation metrics: {evaluation_metrics}")
+            logger.info(f"Computed threshold: {threshold:.4f}")
+            logger.info(f"FAR (False Acceptance Rate): {evaluation_metrics['far']:.4f}")
+            logger.info(f"FRR (False Rejection Rate): {evaluation_metrics['frr']:.4f}")
+            logger.info(f"ROC-AUC: {evaluation_metrics['roc_auc']:.4f}")
+            logger.info(f"EER: {evaluation_metrics['eer']:.4f}")
             
             # Extract key metrics
             far_at_thr = evaluation_metrics['far']
