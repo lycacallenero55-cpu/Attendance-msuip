@@ -123,12 +123,16 @@ class SignatureVerificationModel:
         
         return model
     
-    def compute_centroid_and_adaptive_threshold(self, genuine_images: List, forged_images: Optional[List] = None) -> Tuple[List[float], float]:
+    def compute_centroid_and_adaptive_threshold(self, genuine_images: List, forged_images: Optional[List] = None, 
+                                               val_genuine_images: Optional[List] = None, 
+                                               val_forged_images: Optional[List] = None) -> Tuple[List[float], float]:
         """Compute centroid and adaptive threshold using EER optimization
         
         Args:
-            genuine_images: List of genuine signature images
-            forged_images: Optional list of forged signature images
+            genuine_images: List of genuine signature images for centroid computation
+            forged_images: Optional list of forged signature images for threshold computation
+            val_genuine_images: Optional validation genuine images (preferred for threshold)
+            val_forged_images: Optional validation forged images (preferred for threshold)
             
         Returns:
             Tuple of (centroid as list, threshold as float)
@@ -136,25 +140,34 @@ class SignatureVerificationModel:
         if not genuine_images:
             raise ValueError("No genuine images provided")
         
-        # Get embeddings for genuine samples
+        # Get embeddings for genuine samples to compute centroid
         embeddings = self.embed_images(genuine_images)
         centroid = np.mean(embeddings, axis=0)
         
-        # Compute distances for genuine samples
-        genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
-        
-        if forged_images and len(forged_images) > 0:
-            # If we have forged samples, optimize threshold using EER
+        # Use validation data for threshold computation if available (prevents overfitting)
+        if val_genuine_images is not None and val_forged_images is not None:
+            logger.info("Using validation data for threshold computation")
+            val_genuine_embeddings = self.embed_images(val_genuine_images)
+            val_forged_embeddings = self.embed_images(val_forged_images)
+            
+            val_genuine_dists = np.linalg.norm(val_genuine_embeddings - centroid, axis=1)
+            val_forged_dists = np.linalg.norm(val_forged_embeddings - centroid, axis=1)
+            
+            threshold = self._find_eer_threshold(val_genuine_dists, val_forged_dists)
+            logger.info(f"Computed validation-based threshold: {threshold:.4f}")
+            
+        elif forged_images and len(forged_images) > 0:
+            # Fallback to training data if no validation data
+            logger.warning("Using training data for threshold computation - may cause overfitting")
+            genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
             forged_embeddings = self.embed_images(forged_images)
             forged_dists = np.linalg.norm(forged_embeddings - centroid, axis=1)
             
-            # Find optimal threshold using ROC analysis
             threshold = self._find_eer_threshold(genuine_dists, forged_dists)
-            
-            logger.info(f"Computed adaptive threshold: {threshold:.4f}")
+            logger.info(f"Computed training-based threshold: {threshold:.4f}")
         else:
             # Use statistical approach if no forged samples
-            # Set threshold at 95th percentile with 20% margin
+            genuine_dists = np.linalg.norm(embeddings - centroid, axis=1)
             threshold = float(np.percentile(genuine_dists, 95) * 1.2)
             logger.info(f"Computed statistical threshold: {threshold:.4f}")
         
@@ -183,6 +196,86 @@ class SignatureVerificationModel:
         
         # Add safety margin (10% buffer)
         return float(best_threshold * 1.1)
+    
+    def evaluate_model_comprehensive(self, genuine_images: List, forged_images: List, 
+                                   threshold: float = None) -> dict:
+        """Comprehensive model evaluation with multiple metrics"""
+        from sklearn.metrics import roc_auc_score, roc_curve, precision_recall_curve, auc
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+        
+        # Get embeddings
+        genuine_embeddings = self.embed_images(genuine_images)
+        forged_embeddings = self.embed_images(forged_images)
+        
+        # Compute centroid
+        centroid = np.mean(genuine_embeddings, axis=0)
+        
+        # Compute distances
+        genuine_dists = np.linalg.norm(genuine_embeddings - centroid, axis=1)
+        forged_dists = np.linalg.norm(forged_embeddings - centroid, axis=1)
+        
+        # Create labels (1 for genuine, 0 for forged)
+        y_true = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(forged_dists))])
+        y_scores = np.concatenate([-genuine_dists, -forged_dists])  # Negative distances for ROC
+        
+        # Compute metrics
+        roc_auc = roc_auc_score(y_true, y_scores)
+        precision, recall, pr_thresholds = precision_recall_curve(y_true, y_scores)
+        pr_auc = auc(recall, precision)
+        
+        # Use provided threshold or compute optimal
+        if threshold is None:
+            fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+            # Find threshold at EER
+            fnr = 1 - tpr
+            eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
+            threshold = -thresholds[eer_idx]  # Convert back to positive distance
+        
+        # Compute predictions at threshold
+        genuine_pred = (genuine_dists <= threshold).astype(int)
+        forged_pred = (forged_dists <= threshold).astype(int)
+        y_pred = np.concatenate([genuine_pred, forged_pred])
+        
+        # Compute classification metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        precision_at_thresh = precision_score(y_true, y_pred, zero_division=0)
+        recall_at_thresh = recall_score(y_true, y_pred, zero_division=0)
+        f1_at_thresh = f1_score(y_true, y_pred, zero_division=0)
+        
+        # Compute EER
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        fnr = 1 - tpr
+        eer_idx = np.nanargmin(np.absolute((fnr - fpr)))
+        eer = fpr[eer_idx]
+        
+        # Compute FAR and FRR at threshold
+        far = np.mean(forged_dists <= threshold)  # False Acceptance Rate
+        frr = np.mean(genuine_dists > threshold)  # False Rejection Rate
+        
+        return {
+            'roc_auc': float(roc_auc),
+            'pr_auc': float(pr_auc),
+            'eer': float(eer),
+            'accuracy': float(accuracy),
+            'precision': float(precision_at_thresh),
+            'recall': float(recall_at_thresh),
+            'f1_score': float(f1_at_thresh),
+            'far': float(far),
+            'frr': float(frr),
+            'threshold': float(threshold),
+            'genuine_distances': {
+                'mean': float(np.mean(genuine_dists)),
+                'std': float(np.std(genuine_dists)),
+                'min': float(np.min(genuine_dists)),
+                'max': float(np.max(genuine_dists))
+            },
+            'forged_distances': {
+                'mean': float(np.mean(forged_dists)),
+                'std': float(np.std(forged_dists)),
+                'min': float(np.min(forged_dists)),
+                'max': float(np.max(forged_dists))
+            }
+        }
     
     def embed_images(self, images: List[Union[np.ndarray, Image.Image]]) -> np.ndarray:
         """Generate normalized embeddings for images"""
@@ -273,12 +366,12 @@ class SignatureVerificationModel:
                 pairs.append([images[idx1], images[idx2]])
                 pair_labels.append(1)  # Similar
     
-        # Forged pairs
+        # Forged pairs - FIXED: These should be labeled as 0 (different), not 1 (similar)
         for i in range(len(forged_indices)):
             for j in range(i + 1, min(i + 2, len(forged_indices))):  # Limit pairs per image
                 idx1, idx2 = forged_indices[i], forged_indices[j]
                 pairs.append([images[idx1], images[idx2]])
-                pair_labels.append(1)  # Similar
+                pair_labels.append(0)  # FIXED: Forged-forged pairs are different signatures, not similar
     
         # Generate negative pairs (different classes)
         for i in range(min(len(genuine_indices), len(forged_indices))):
@@ -333,14 +426,14 @@ class SignatureVerificationModel:
                 pairs_b.append(forged_imgs[idx2])
                 pair_labels.append(0)
     
-        # Generate hard negative pairs (forged-forged) - small percentage
+        # Generate hard negative pairs (forged-forged) - FIXED: These are different signatures
         if forged_imgs and len(forged_imgs) > 1:
             num_hard_negative = num_positive // 10  # 10% hard negatives
             for _ in range(num_hard_negative):
                 idx1, idx2 = np.random.choice(len(forged_imgs), 2, replace=False)
                 pairs_a.append(forged_imgs[idx1])
                 pairs_b.append(forged_imgs[idx2])
-                pair_labels.append(0)
+                pair_labels.append(0)  # FIXED: Forged-forged pairs are different signatures
     
         # Convert to numpy arrays with consistent dtype
         pairs_a = self._process_batch(pairs_a)
@@ -404,13 +497,32 @@ class SignatureVerificationModel:
     def train_with_augmented_data(self, all_images: List, all_labels: List, validation_split: float = 0.2) -> keras.callbacks.History:
         """Train with augmented data using enhanced callbacks and strategies"""
         try:
-            # Prepare data
-            input_a, input_b, labels = self.prepare_augmented_data(all_images, all_labels)
+            # CRITICAL FIX: Split data BEFORE augmentation to prevent data leakage
+            from sklearn.model_selection import train_test_split
             
-            if len(labels) == 0:
+            # Split original images into train/validation
+            train_images, val_images, train_labels, val_labels = train_test_split(
+                all_images, all_labels, 
+                test_size=validation_split, 
+                random_state=42,
+                stratify=all_labels
+            )
+            
+            logger.info(f"Data split: {len(train_images)} train, {len(val_images)} validation")
+            logger.info(f"Train labels: {np.sum(train_labels)} genuine, {len(train_labels) - np.sum(train_labels)} forged")
+            logger.info(f"Val labels: {np.sum(val_labels)} genuine, {len(val_labels) - np.sum(val_labels)} forged")
+            
+            # Prepare training data
+            train_input_a, train_input_b, train_pair_labels = self.prepare_augmented_data(train_images, train_labels)
+            
+            # Prepare validation data (no augmentation to prevent leakage)
+            val_input_a, val_input_b, val_pair_labels = self.prepare_augmented_data(val_images, val_labels)
+            
+            if len(train_pair_labels) == 0:
                 raise ValueError("No training pairs could be created")
             
-            logger.info(f"Training with {len(labels)} pairs ({np.sum(labels)} positive, {len(labels) - np.sum(labels)} negative)")
+            logger.info(f"Training with {len(train_pair_labels)} pairs ({np.sum(train_pair_labels)} positive, {len(train_pair_labels) - np.sum(train_pair_labels)} negative)")
+            logger.info(f"Validation with {len(val_pair_labels)} pairs ({np.sum(val_pair_labels)} positive, {len(val_pair_labels) - np.sum(val_pair_labels)} negative)")
             
             # Create model
             self.model = self.create_siamese_network()
@@ -418,20 +530,13 @@ class SignatureVerificationModel:
             # Enhanced callbacks
             callbacks = self._create_callbacks()
             
-            # Custom training loop with gradient accumulation for better CPU performance
-            if self.use_gradient_accumulation:
-                history = self._train_with_gradient_accumulation(
-                    input_a, input_b, labels, 
-                    validation_split, callbacks
-                )
-            else:
-                # Standard training
-                history = self.model.fit(
-                    [input_a, input_b], labels,
-                    batch_size=self.batch_size,
-                    epochs=self.epochs,
-                    validation_split=validation_split,
-                    callbacks=callbacks,
+            # FIXED: Use separate validation data instead of validation_split
+            history = self.model.fit(
+                [train_input_a, train_input_b], train_pair_labels,
+                batch_size=self.batch_size,
+                epochs=self.epochs,
+                validation_data=([val_input_a, val_input_b], val_pair_labels),
+                callbacks=callbacks,
                     verbose=1
                 )
             

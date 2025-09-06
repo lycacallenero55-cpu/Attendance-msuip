@@ -125,43 +125,34 @@ async def start_training(
             # Train with augmented data for better robustness
             history = model_manager.train_with_augmented_data(all_images, all_labels)
 
-            # Compute prototype (centroid) from genuine samples
-            centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
-            genuine_images, 
-            forged_images if len(forged_images) > 0 else None
+            # CRITICAL FIX: Split data for proper threshold computation
+            from sklearn.model_selection import train_test_split
+            
+            # Split into train/validation for threshold computation
+            train_genuine, val_genuine, train_forged, val_forged = train_test_split(
+                genuine_images, forged_images if forged_images else [],
+                test_size=0.2, random_state=42
             )
-            # Calibrate threshold via EER using distances to centroid
-            gen_emb = model_manager.embed_images(genuine_images)
-            forg_emb = model_manager.embed_images(forged_images) if len(forged_images) else np.zeros((0, gen_emb.shape[1]))
-            centroid_vec = np.array(centroid)
-            gen_d = np.linalg.norm(gen_emb - centroid_vec, axis=1)
-            forg_d = np.linalg.norm(forg_emb - centroid_vec, axis=1) if forg_emb.size else np.array([])
-
-            def compute_eer_threshold(genuine_d, forged_d):
-                if len(genuine_d) == 0:
-                    return 0.7, 0.0, 0.0
-                # Candidate thresholds are unique distances observed
-                all_d = np.concatenate([genuine_d, forged_d]) if len(forged_d) else genuine_d
-                all_d = np.unique(np.sort(all_d))
-                best_thr = all_d[0] if all_d.size > 0 else 0.7
-                best_gap = 1e9
-                best_far = 0.0
-                best_frr = 0.0
-                total_gen = max(1, len(genuine_d))
-                total_forg = max(1, len(forged_d))
-                for thr in all_d:
-                    # Accept if distance <= thr
-                    frr = float(np.sum(genuine_d > thr)) / total_gen
-                    far = float(np.sum(forged_d <= thr)) / total_forg if total_forg > 0 else 0.0
-                    gap = abs(far - frr)
-                    if gap < best_gap:
-                        best_gap = gap
-                        best_thr = thr
-                        best_far = far
-                        best_frr = frr
-                return float(best_thr), float(best_far), float(best_frr)
-
-            threshold, far_at_thr, frr_at_thr = compute_eer_threshold(gen_d, forg_d)
+            
+            # Compute prototype (centroid) from training genuine samples, threshold from validation data
+            centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
+                train_genuine, 
+                train_forged if len(train_forged) > 0 else None,
+                val_genuine,
+                val_forged if len(val_forged) > 0 else None
+            )
+            # ENHANCED: Use comprehensive evaluation with validation data
+            evaluation_metrics = model_manager.evaluate_model_comprehensive(
+                val_genuine, val_forged, threshold
+            )
+            
+            logger.info(f"Model evaluation metrics: {evaluation_metrics}")
+            
+            # Extract key metrics
+            far_at_thr = evaluation_metrics['far']
+            frr_at_thr = evaluation_metrics['frr']
+            roc_auc = evaluation_metrics['roc_auc']
+            eer = evaluation_metrics['eer']
             
             # Get best accuracy
             best_accuracy = max(history.history['val_accuracy'])
@@ -222,8 +213,11 @@ async def start_training(
                 "calibration": {
                     "threshold": float(threshold),
                     "far": float(far_at_thr),
-                    "frr": float(frr_at_thr)
+                    "frr": float(frr_at_thr),
+                    "roc_auc": float(roc_auc),
+                    "eer": float(eer)
                 },
+                "evaluation_metrics": evaluation_metrics,
                 "message": "Model trained successfully"
             }
             
@@ -407,11 +401,21 @@ async def run_async_training(job, student, genuine_data, forged_data):
         t0 = time.time()
         history = model_manager.train_with_augmented_data(all_images, all_labels)
         
-        # FIXED: Use correct method name
+        # FIXED: Use correct method name and proper data splitting
         job_queue.update_job_progress(job.job_id, 80.0, "Computing prototype and threshold...")
+        
+        # Split into train/validation for threshold computation
+        from sklearn.model_selection import train_test_split
+        train_genuine, val_genuine, train_forged, val_forged = train_test_split(
+            genuine_images, forged_images if forged_images else [],
+            test_size=0.2, random_state=42
+        )
+        
         centroid, threshold = model_manager.compute_centroid_and_adaptive_threshold(
-            genuine_images,
-            forged_images if len(forged_images) > 0 else None
+            train_genuine,
+            train_forged if len(train_forged) > 0 else None,
+            val_genuine,
+            val_forged if len(val_forged) > 0 else None
         )
         
         # Calibrate threshold via EER (using the returned threshold)
