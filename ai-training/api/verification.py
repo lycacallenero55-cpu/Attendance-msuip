@@ -271,8 +271,26 @@ async def identify_signature_owner(
         # Fetch all completed models that have prototype metadata
         all_models = await db_manager.get_trained_models()
         candidates = [m for m in (all_models or []) if m.get("status") == "completed" and m.get("prototype_centroid") is not None]
+        
+        # Additional validation: ensure models have reasonable thresholds
+        valid_candidates = []
+        for model in candidates:
+            threshold = model.get("prototype_threshold")
+            if threshold is not None:
+                try:
+                    threshold_val = float(threshold)
+                    if threshold_val >= 0.1:  # Reasonable minimum threshold
+                        valid_candidates.append(model)
+                    else:
+                        logger.warning(f"Model {model.get('id')} has suspiciously low threshold: {threshold_val}")
+                except:
+                    logger.warning(f"Model {model.get('id')} has invalid threshold: {threshold}")
+            else:
+                logger.warning(f"Model {model.get('id')} has no threshold")
+        
+        candidates = valid_candidates
         if not candidates:
-            raise HTTPException(status_code=404, detail="No trained models available")
+            raise HTTPException(status_code=404, detail="No valid trained models available")
 
         best = None
         best_score = -1.0
@@ -314,6 +332,8 @@ async def identify_signature_owner(
                     continue
                 try:
                     threshold = float(model.get("prototype_threshold")) if model.get("prototype_threshold") is not None else 0.7
+                    # Ensure threshold is reasonable (not too low)
+                    threshold = max(threshold, 0.3)  # Minimum threshold of 0.3
                 except Exception:
                     threshold = 0.7
 
