@@ -67,7 +67,7 @@ async def load_model_from_supabase(supabase_path: str):
         if response is None:
             raise Exception("Download failed: No data received")
         
-        # Use temporary file with immediate cleanup
+        # Use temporary file with manual cleanup
         import tempfile
         import os
         from tensorflow import keras
@@ -75,16 +75,28 @@ async def load_model_from_supabase(supabase_path: str):
         # Create a temporary file with the correct extension
         suffix = '.keras' if supabase_path.endswith('.keras') else '.h5'
         
-        # Use context manager to ensure cleanup
-        with tempfile.NamedTemporaryFile(delete=True, suffix=suffix) as temp_file:
+        # Create temporary file that won't be auto-deleted
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        temp_path = temp_file.name
+        
+        try:
+            # Write data to temporary file
             temp_file.write(response)
-            temp_file.flush()  # Ensure data is written
+            temp_file.flush()
+            temp_file.close()  # Close file handle but keep file
             
             # Load model from temporary file
-            model = keras.models.load_model(temp_file.name)
+            model = keras.models.load_model(temp_path)
             
             logger.info(f"Model loaded directly from Supabase: {supabase_path}")
             return model
+            
+        finally:
+            # Clean up temporary file after loading
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass  # File might already be deleted
     
     except Exception as e:
         logger.error(f"Error loading model from Supabase: {e}")
