@@ -41,8 +41,8 @@ class SignatureVerificationModel:
                 include_top=False,
                 weights='imagenet')
             
-            # Fine-tune more layers for signature-specific features
-            for layer in base.layers[:-40]:  # Unfreeze last 40 layers
+            # Freeze MORE layers to prevent overfitting
+            for layer in base.layers[:-20]:  # Freeze more layers (was -40)
                 layer.trainable = False
             
             x = layers.Input(shape=(self.image_size, self.image_size, 3))
@@ -55,20 +55,20 @@ class SignatureVerificationModel:
             
             y = layers.GlobalAveragePooling2D()(y)
             
-            # Deeper feature extraction with residual connections
-            y1 = layers.Dense(512, activation='relu')(y)
+            # Reduced feature extraction to prevent overfitting
+            y1 = layers.Dense(256, activation='relu')(y)  # Reduced from 512
             y1 = layers.BatchNormalization()(y1)
-            y1 = layers.Dropout(0.6)(y1)  # Increased from 0.4
+            y1 = layers.Dropout(0.7)(y1)  # Increased dropout
             
-            y2 = layers.Dense(256, activation='relu')(y1)
+            y2 = layers.Dense(128, activation='relu')(y1)  # Reduced from 256
             y2 = layers.BatchNormalization()(y2)
-            y2 = layers.Dropout(0.5)(y2)  # Increased from 0.3
+            y2 = layers.Dropout(0.6)(y2)  # Increased dropout
             
-            # Residual connection
-            y1_proj = layers.Dense(256, activation='linear')(y1)
+            # Residual connection (adjusted for new dimensions)
+            y1_proj = layers.Dense(128, activation='linear')(y1)  # Adjusted for new size
             y2 = layers.Add()([y2, y1_proj])
             
-            y3 = layers.Dense(128, activation='relu')(y2)
+            y3 = layers.Dense(64, activation='relu')(y2)  # Reduced from 128
             y3 = layers.BatchNormalization()(y3)
             
             # Use LayerNormalization instead of Lambda for L2 normalization
@@ -88,15 +88,15 @@ class SignatureVerificationModel:
         # This avoids Lambda layers that cause serialization issues
         merged = layers.Concatenate()([embedding_a, embedding_b])
         
-        # Enhanced classification head with more regularization
-        output = layers.Dense(256, activation='relu')(merged)
+        # Reduced classification head to prevent overfitting
+        output = layers.Dense(128, activation='relu')(merged)  # Reduced from 256
         output = layers.BatchNormalization()(output)
-        output = layers.Dropout(0.6)(output)  # Increased from 0.4
-        output = layers.Dense(128, activation='relu')(output)
+        output = layers.Dropout(0.7)(output)  # Increased dropout
+        output = layers.Dense(64, activation='relu')(output)  # Reduced from 128
         output = layers.BatchNormalization()(output)
-        output = layers.Dropout(0.5)(output)  # Increased from 0.3
-        output = layers.Dense(64, activation='relu')(output)
-        output = layers.Dropout(0.4)(output)  # Increased from 0.2
+        output = layers.Dropout(0.6)(output)  # Increased dropout
+        output = layers.Dense(32, activation='relu')(output)  # Reduced from 64
+        output = layers.Dropout(0.5)(output)  # Increased dropout
         output = layers.Dense(1, activation='sigmoid', name='similarity_score')(output)
         
         # Create the model
@@ -104,7 +104,7 @@ class SignatureVerificationModel:
         
         # Use simple Adam optimizer
         # Compile model with weight decay for regularization
-        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, weight_decay=1e-4)
+        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate, weight_decay=1e-3)  # Increased weight decay
         
         # Custom metrics including AUC-ROC and AUC-PR
         model.compile(
@@ -560,17 +560,17 @@ class SignatureVerificationModel:
         """Create enhanced training callbacks"""
         callbacks = [
             keras.callbacks.EarlyStopping(
-                monitor='val_auc',
-                patience=15,
+                monitor='val_loss',  # Monitor validation loss instead of AUC
+                patience=8,  # Reduced patience for earlier stopping
                 restore_best_weights=True,
-                mode='max',
-                min_delta=0.001,
+                mode='min',
+                min_delta=0.01,  # Increased minimum delta
                 verbose=1
             ),
             keras.callbacks.ReduceLROnPlateau(
                 monitor='val_loss',
                 factor=0.5,
-                patience=5,
+                patience=3,  # Reduced patience for faster learning rate reduction
                 min_lr=1e-7,
                 verbose=1
             ),
