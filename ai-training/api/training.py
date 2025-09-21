@@ -187,8 +187,7 @@ async def _train_and_store_individual_from_arrays(student: dict, genuine_arrays:
     student_name = f"{student.get('firstname', '')} {student.get('surname', '')}".strip() or f"Student_{student['id']}"
     training_data = {
         student_name: {
-            'genuine': genuine_norm,
-            'forged': forged_norm
+            'genuine': genuine_norm
         }
     }
 
@@ -439,8 +438,7 @@ async def train_signature_model(student, genuine_data, forged_data, job=None):
         student_name = f"{student.get('firstname', '')} {student.get('surname', '')}".strip() or f"Student_{student['id']}"
         training_data = {
             student_name: {
-                'genuine': genuine_images,
-                'forged': forged_images
+                'genuine': genuine_images
             }
         }
 
@@ -1112,8 +1110,7 @@ async def run_gpu_training(job, student, genuine_data, forged_data, use_s3_uploa
         # Prepare training data
         training_data = {
             f"student_{student['id']}": {
-                'genuine': genuine_images,
-                'forged': forged_images
+                'genuine': genuine_images
             }
         }
 
@@ -1216,19 +1213,18 @@ async def run_global_gpu_training(job, student_ids, genuine_data, forged_data, u
 
         # Validate minimum totals across all selected students
         total_genuine = sum(len(v["genuine_images"]) for v in per_student.values())
-        total_forged = sum(len(v["forged_images"]) for v in per_student.values())
         if total_genuine < settings.MIN_GENUINE_SAMPLES:
             raise Exception("Insufficient stored signatures across selected students to train global model")
 
-        # Build training data structure for GPU service (expects simple dict of lists of arrays)
+        # Build training data structure for GPU service (owner identification only)
         training_data = {}
         for s in students:
             sid = int(s["id"])  # type: ignore[index]
-            bucket = per_student.get(sid, {"genuine_images": [], "forged_images": []})
+            bucket = per_student.get(sid, {"genuine_images": []})
             # Use student name for consistent mapping
             student_name = f"{s.get('firstname', '')} {s.get('surname', '')}".strip() or f"Student_{sid}"
             # GlobalSignatureClassifier expects {student_name: [images]} format
-            training_data[student_name] = bucket["genuine_images"]  # Only genuine images for global classifier
+            training_data[student_name] = bucket["genuine_images"]  # Only genuine images for owner identification
 
         if job:
             job_queue.update_job_progress(job.job_id, 25.0, "Starting global GPU training...")
@@ -1329,18 +1325,17 @@ async def run_global_async_training(job, student_ids, genuine_data, forged_data,
         per_student = await _fetch_and_validate_student_images(sid_ints)
 
         total_genuine = sum(len(v["genuine_images"]) for v in per_student.values())
-        total_forged = sum(len(v["forged_images"]) for v in per_student.values())
         if total_genuine < settings.MIN_GENUINE_SAMPLES:
             raise Exception("Insufficient stored signatures across selected students to train global model")
 
         training_data = {}
         for s in students:
             sid = int(s["id"])  # type: ignore[index]
-            bucket = per_student.get(sid, {"genuine_images": [], "forged_images": []})
+            bucket = per_student.get(sid, {"genuine_images": []})
             # Use student name for consistent mapping with GlobalSignatureClassifier
             student_name = f"{s.get('firstname', '')} {s.get('surname', '')}".strip() or f"Student_{sid}"
             # GlobalSignatureClassifier expects {student_name: [images]} format
-            training_data[student_name] = bucket['genuine_images']  # Only genuine images for global classifier
+            training_data[student_name] = bucket['genuine_images']  # Only genuine images for owner identification
 
         if job:
             job_queue.update_job_progress(job.job_id, 80.0, "Training global model...")

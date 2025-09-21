@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 GPU Training Script - TensorFlow 2.18 Compatible
-Global Signature Classifier for Multi-Student Verification
+Global Signature Classifier for Multi-Student Owner Identification
 """
 
 import sys
@@ -152,6 +152,7 @@ def process_training_data_for_global_model(training_data_raw, preprocessor):
     """
     Process training data for Global Signature Classifier
     Returns data in format: {student_id: [images]}
+    Only processes genuine signatures for owner identification
     """
     print("Processing training data for Global Signature Classifier...")
     processed_data = {}
@@ -160,7 +161,7 @@ def process_training_data_for_global_model(training_data_raw, preprocessor):
         print(f"\nProcessing student: {student_name}")
         student_images = []
         
-        # Process genuine images only (no forgery detection)
+        # Process genuine images only (owner identification only)
         genuine_raw = data.get('genuine', [])
         print(f"  Found {len(genuine_raw)} genuine images")
         
@@ -316,6 +317,7 @@ def train_on_gpu(training_data_key, job_id, student_id):
         print("Uploaded training results to S3")
         
         print("\n=== GLOBAL SIGNATURE CLASSIFIER TRAINING COMPLETED ===")
+        print("Owner Identification Only - No Forgery Detection")
         print(f"Job ID: {job_id}")
         print(f"Model Type: Global Classifier")
         print(f"Final accuracy: {final_accuracy:.4f}")
@@ -346,6 +348,7 @@ if __name__ == "__main__":
     
     print("🎓 Global Signature Classifier GPU Training")
     print("=" * 50)
+    print("Owner Identification Only - No Forgery Detection")
     print(f"Training data key: {training_data_key}")
     print(f"Job ID: {job_id}")
     print(f"Student ID: {student_id}")

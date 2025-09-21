@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 class GlobalSignatureClassifier:
     """
-    Global signature classification model for multi-student verification:
+    Global signature classification model for multi-student owner identification:
     - One global model for all students
     - Few-shot learning capability
     - Incremental learning (add new students)
-    - Owner detection only (no forgery detection)
+    - Owner identification only (no forgery detection)
     """
     
     def __init__(self, 
