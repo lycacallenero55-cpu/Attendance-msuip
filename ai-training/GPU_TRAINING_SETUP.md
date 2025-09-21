@@ -28,7 +28,7 @@ Your web application now has **GPU training support**! When users click "Train M
 
 1. **Launch AWS GPU instance** (10-50x faster than CPU)
 2. **Upload training data** to S3
-3. **Train AI models** on GPU with TensorFlow 2.13
+3. **Train AI models** on GPU with TensorFlow 2.18
 4. **Stream real-time progress** to the web interface
 5. **Save models** to S3 and database
 6. **Clean up** the GPU instance
