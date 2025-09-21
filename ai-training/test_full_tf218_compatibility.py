@@ -194,8 +194,8 @@ def test_model_imports():
         from models.signature_embedding_model import SignatureEmbeddingModel
         print("✅ SignatureEmbeddingModel import: Working")
         
-        from models.global_signature_model import GlobalSignatureVerificationModel
-        print("✅ GlobalSignatureVerificationModel import: Working")
+        from models.global_signature_classifier import GlobalSignatureClassifier
+        print("✅ GlobalSignatureClassifier import: Working")
         
         from utils.tfdata import build_preprocess_layers, make_tfdata_from_numpy
         print("✅ tfdata utilities import: Working")

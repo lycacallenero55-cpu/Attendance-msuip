@@ -14,7 +14,7 @@ from utils.signature_preprocessing import SignaturePreprocessor
 from utils.image_processing import validate_image
 # Removed non-existent imports - using direct S3 download instead
 from utils.s3_storage import create_presigned_get, download_bytes
-from models.global_signature_model import GlobalSignatureVerificationModel
+from models.global_signature_classifier import GlobalSignatureClassifier
 from utils.s3_supabase_sync import sync_supabase_with_s3, sync_supabase_with_s3_enhanced, get_students_with_missing_images, fix_student_image_counts
 import requests
 from config import settings
@@ -550,7 +550,7 @@ async def identify_signature_owner(
             logger.info(f"Using global model: {latest_global_model.get('id')}")
             # Load global model and perform identification
             try:
-                gsm = GlobalSignatureVerificationModel()
+                gsm = GlobalSignatureClassifier()
                 model_path = latest_global_model.get("model_path")
                 if model_path and model_path.startswith('https://') and 'amazonaws.com' in model_path:
                     # Download global model from S3
@@ -1116,7 +1116,7 @@ async def identify_signature_owner(
             trained_ids = await _get_trained_student_ids()
             latest_global = await db_manager.get_latest_global_model() if hasattr(db_manager, 'get_latest_global_model') else None
             if latest_global and latest_global.get("model_path"):
-                gsm = GlobalSignatureVerificationModel()
+                gsm = GlobalSignatureClassifier()
                 model_path = latest_global.get("model_path")
                 if model_path.startswith('https://') and 'amazonaws.com' in model_path:
                     # Download global model from S3 using presigned URL
@@ -1897,7 +1897,7 @@ async def verify_signature(
         try:
             latest_global = await db_manager.get_latest_global_model() if hasattr(db_manager, 'get_latest_global_model') else None
             if latest_global and latest_global.get("model_path"):
-                gsm = GlobalSignatureVerificationModel()
+                gsm = GlobalSignatureClassifier()
                 model_path = latest_global.get("model_path")
                 if model_path.startswith('https://') and 'amazonaws.com' in model_path:
                     # Download global model from S3 using presigned URL

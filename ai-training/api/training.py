@@ -33,7 +33,7 @@ from utils.aws_gpu_training import gpu_training_manager
 from services.model_versioning import model_versioning_service
 from config import settings
 import os
-from models.global_signature_model import GlobalSignatureVerificationModel
+from models.global_signature_classifier import GlobalSignatureClassifier
 from utils.s3_storage import create_presigned_get, download_bytes
 from utils.s3_storage import upload_model_file as upload_file_generic
 from utils.storage import cleanup_local_file
@@ -974,7 +974,7 @@ async def train_global_model():
             bucket = data_by_student.setdefault(sid, {"genuine_images": [], "forged_images": []})
             (bucket["genuine_images"] if label == "genuine" else bucket["forged_images"]).append(image)
 
-        gsm = GlobalSignatureVerificationModel()
+        gsm = GlobalSignatureClassifier()
         # Train global classifier with tf.data and validation metrics
         history = gsm.train_global_classifier(data_by_student, epochs=settings.MODEL_EPOCHS)
         
@@ -1349,7 +1349,7 @@ async def run_global_async_training(job, student_ids, genuine_data, forged_data,
             job_queue.update_job_progress(job.job_id, 80.0, "Training global model...")
 
         # Train global model
-        gsm = GlobalSignatureVerificationModel()
+        gsm = GlobalSignatureClassifier()
         history = gsm.train_global_model(training_data)
         
         # Save global model directly to S3 (no local files)
