@@ -174,24 +174,20 @@ class AIService {
   }
 
   // Subscribe to async training progress via SSE
-  subscribeToJobProgress(taskId: string, onUpdate: (data: any) => void) {
-    let es: EventSource | null = null;
-    try {
-      es = new EventSource(this.getUrl(`/api/training/async/progress?task_id=${encodeURIComponent(taskId)}`));
-      es.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data);
-          onUpdate(data);
-        } catch (e) {
-          // ignore parse errors
-        }
-      };
-    } catch (e) {
-      console.warn('SSE not available:', e);
-    }
-    return {
-      close: () => es?.close()
+  subscribeToJobProgress(taskId: string, onUpdate: (data: any) => void, onError?: (e: any) => void): EventSource {
+    const es = new EventSource(this.getUrl(`/api/training/async/progress?task_id=${encodeURIComponent(taskId)}`));
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        onUpdate(data);
+      } catch (e) {
+        // ignore parse errors
+      }
     };
+    es.onerror = (e) => {
+      if (onError) onError(e);
+    };
+    return es;
   }
 
   // Trained models listing (stubs)
@@ -199,7 +195,7 @@ class AIService {
   async getGlobalModels(): Promise<any[]> { return []; }
 
   // Helper to verify from data URL
-  async verifySignatureFromDataURL(dataUrl: string) {
+  async verifySignatureFromDataURL(dataUrl: string, _sessionId?: number) {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     const file = new File([blob], 'signature.png', { type: blob.type || 'image/png' });
