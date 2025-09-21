@@ -31,7 +31,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { aiService, AI_CONFIG } from '@/lib/aiService';
+import aiService from '@/lib/aiService';
 import { fetchStudents } from '@/lib/supabaseService';
 import type { Student, StudentTrainingCard as StudentTrainingCardType, TrainingFile } from '@/types';
 import { Progress } from '@/components/ui/progress';
@@ -114,16 +114,11 @@ const SignatureAI = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{
     success: boolean;
-    match: boolean;
-    score: number;
+    student_id?: string;
+    student_name?: string;
+    confidence?: number;
     message?: string;
-    predicted_student_id?: number | null;
-    predicted_student?: {
-      id: number;
-      student_id: string;
-      firstname: string;
-      surname: string;
-    };
+    error?: string;
   } | null>(null);
   const [useCamera, setUseCamera] = useState(false);
   
@@ -990,8 +985,8 @@ const SignatureAI = () => {
       if (result.success) {
         toast({
           title: "Verification Complete",
-          description: result.match 
-            ? "Match found" 
+          description: result.student_id
+            ? "Match found"
             : "No match found",
         });
       } else {
@@ -1095,7 +1090,6 @@ const SignatureAI = () => {
                               .map(x => ({ 
                                 id: `${Date.now()}-${x.student.id}`, 
                                 student: x.student, 
-                                genuineFiles: [], 
                                 // Removed forgedFiles - owner identification only 
                                 isExpanded: true, 
                                 genuineCount: x.genuine_count, 
@@ -2113,5 +2107,6 @@ const SignatureAI = () => {
     </Layout>
   );
 };
+}
 
 export default SignatureAI;
