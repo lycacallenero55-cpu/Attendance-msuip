@@ -59,7 +59,6 @@ const SignatureAI = () => {
       id: '1',
       student: null,
       genuineFiles: [],
-      forgedFiles: [],
       isExpanded: true
     }
   ]);
@@ -150,7 +149,7 @@ const SignatureAI = () => {
   // Student Form Dialog State
   const [isStudentFormDialogOpen, setIsStudentFormDialogOpen] = useState(false);
   const [currentFormCardId, setCurrentFormCardId] = useState<string | null>(null);
-  const [trainingImagesSet, setTrainingImagesSet] = useState<'genuine' | 'forged'>('genuine');
+  // Removed trainingImagesSet - only genuine images for owner identification
   
   // Toggle between Student Cards and Trained Models view
   const [isViewingModels, setIsViewingModels] = useState(false);
@@ -389,20 +388,19 @@ const SignatureAI = () => {
 
   // Validation functions
   const hasUploadedImages = (card: StudentTrainingCardType) => {
-    return card.genuineFiles.length > 0 || card.forgedFiles.length > 0;
+    return card.genuineFiles.length > 0;
   };
 
   const canTrainModel = () => {
     return studentCards.some(card => card.student !== null && (
-      (card.genuineCount ?? 0) + (card.forgedCount ?? 0) > 0 || hasUploadedImages(card)
+      (card.genuineCount ?? 0) > 0 || hasUploadedImages(card)
     ));
   };
 
   const getTotalTrainingData = () => {
     return studentCards.reduce((acc, card) => ({
-      genuine: acc.genuine + card.genuineFiles.length,
-      forged: acc.forged + card.forgedFiles.length
-    }), { genuine: 0, forged: 0 });
+      genuine: acc.genuine + card.genuineFiles.length
+    }), { genuine: 0 });
   };
 
   const getSelectedStudentIds = () => {
@@ -454,12 +452,12 @@ const SignatureAI = () => {
           if (card.id !== cardId) return card;
           // Revoke previews to avoid memory leaks
           card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-          card.forgedFiles.forEach(file => URL.revokeObjectURL(file.preview));
+          // Skip forged files cleanup - owner identification only
           return {
             ...card,
             student: null,
             genuineFiles: [],
-            forgedFiles: [],
+            // Removed forgedFiles - owner identification only
           };
         });
       }
@@ -467,7 +465,7 @@ const SignatureAI = () => {
       const card = prev.find(c => c.id === cardId);
       if (card) {
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-        card.forgedFiles.forEach(file => URL.revokeObjectURL(file.preview));
+        // Skip forged files cleanup - owner identification only
       }
       
       return prev.filter(c => c.id !== cardId);
@@ -497,11 +495,11 @@ const SignatureAI = () => {
       const card = studentCards.find(c => c.id === currentCardId);
       if (card && hasUploadedImages(card) && card.student && card.student.id !== student.id) {
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-        card.forgedFiles.forEach(file => URL.revokeObjectURL(file.preview));
+        // Skip forged files cleanup - owner identification only
         updateStudentCard(currentCardId, {
           student,
           genuineFiles: [],
-          forgedFiles: []
+          // Removed forgedFiles - owner identification only
         });
         toast({
           title: "Student Changed",
@@ -516,7 +514,7 @@ const SignatureAI = () => {
             const toPreview = (rec: { id:number; s3_url:string; s3_key:string; label:'genuine'|'forged' }) => ({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: rec.label } as TrainingFile);
             updateStudentCard(currentCardId, {
               genuineFiles: persisted.filter(x => x.label === 'genuine').map(x => toPreview(x)),
-              forgedFiles: persisted.filter(x => x.label === 'forged').map(x => toPreview(x)),
+              // Removed forgedFiles - owner identification only
             });
           } catch (e) {
             // ignore
@@ -577,7 +575,7 @@ const SignatureAI = () => {
     return valid;
   };
 
-  const handleTrainingFilesChange = async (files: File[], setType: 'genuine' | 'forged', cardId: string) => {
+  const handleTrainingFilesChange = async (files: File[], setType: 'genuine', cardId: string) => {
     const safeFiles = validateFiles(files);
     if (safeFiles.length === 0) return;
 
@@ -606,10 +604,7 @@ const SignatureAI = () => {
     setStudentCards(prev => prev.map(card => {
       if (card.id === cardId) {
         if (setType === 'genuine') {
-          return { ...card, genuineFiles: [...card.genuineFiles, ...uploaded] };
-        } else {
-          return { ...card, forgedFiles: [...card.forgedFiles, ...uploaded] };
-        }
+        return { ...card, genuineFiles: [...card.genuineFiles, ...uploaded] };
       }
       return card;
     }));
@@ -618,10 +613,10 @@ const SignatureAI = () => {
 
   // (Deletion remains as previously implemented below in file)
 
-  const removeTrainingFile = (index: number, setType: 'genuine' | 'forged', cardId: string) => {
+  const removeTrainingFile = (index: number, setType: 'genuine', cardId: string) => {
     setStudentCards(prev => prev.map(card => {
       if (card.id === cardId) {
-        const list = setType === 'genuine' ? [...card.genuineFiles] : [...card.forgedFiles];
+        const list = [...card.genuineFiles];
         const removed = list[index];
         // Best-effort backend delete when we know record id
         if (removed?.id) {
@@ -632,7 +627,7 @@ const SignatureAI = () => {
           URL.revokeObjectURL(removed.preview);
         }
         list.splice(index, 1);
-        return setType === 'genuine' ? { ...card, genuineFiles: list } : { ...card, forgedFiles: list };
+        return { ...card, genuineFiles: list };
       }
       return card;
     }));
@@ -644,8 +639,8 @@ const SignatureAI = () => {
       if (card.id === cardId) {
         // Revoke all object URLs to prevent memory leaks
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-        card.forgedFiles.forEach(file => URL.revokeObjectURL(file.preview));
-        return { ...card, genuineFiles: [], forgedFiles: [] };
+        // Skip forged files cleanup - owner identification only
+        return { ...card, genuineFiles: [] };
       }
       return card;
     }));
@@ -680,14 +675,12 @@ const SignatureAI = () => {
 
     try {
       const allGenuineFiles: File[] = [];
-      const allForgedFiles: File[] = [];
       const studentIds: string[] = [];
       
       studentCards.forEach(card => {
-        if (card.student && ((card.genuineCount ?? card.genuineFiles.length) + (card.forgedCount ?? card.forgedFiles.length)) > 0) {
+        if (card.student && (card.genuineCount ?? card.genuineFiles.length) > 0) {
           studentIds.push(card.student.student_id);
           allGenuineFiles.push(...card.genuineFiles.filter(f => !f.placeholder).map(f => f.file));
-          allForgedFiles.push(...card.forgedFiles.filter(f => !f.placeholder).map(f => f.file));
         }
       });
 
@@ -927,7 +920,7 @@ const SignatureAI = () => {
     if (modalContext?.kind === 'training') {
       const card = studentCards.find(c => c.id === modalContext.cardId);
       if (card) {
-        const files = modalContext.setType === 'genuine' ? card.genuineFiles : card.forgedFiles;
+        const files = card.genuineFiles;
         const idx = files.findIndex(f => f.preview === modalImages[modalImageIndex]);
         if (idx >= 0) {
           const f = files[idx];
@@ -975,9 +968,7 @@ const SignatureAI = () => {
         const updated = card.genuineFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
         setModalImages(updated);
       } else {
-        const idx = card.forgedFiles.findIndex(f => f.preview === targetPreview);
-        if (idx !== -1) removeTrainingFile(idx, 'forged', modalContext.cardId);
-        const updated = card.forgedFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
+        // Skip forged files - owner identification only
         setModalImages(updated);
       }
     }
@@ -1111,7 +1102,7 @@ const SignatureAI = () => {
                                 id: `${Date.now()}-${x.student.id}`, 
                                 student: x.student, 
                                 genuineFiles: [], 
-                                forgedFiles: [], 
+                                // Removed forgedFiles - owner identification only 
                                 isExpanded: true, 
                                 genuineCount: x.genuine_count, 
                                 forgedCount: x.forged_count,
@@ -1122,12 +1113,7 @@ const SignatureAI = () => {
                                   placeholder: true,
                                   label: 'genuine' as const
                                 })),
-                                forgedFiles: Array(x.forged_count).fill(null).map((_, i) => ({
-                                  file: new File([], `placeholder-${i}`),
-                                  preview: '',
-                                  placeholder: true,
-                                  label: 'forged' as const
-                                }))
+                                // Removed forgedFiles - owner identification only
                               }));
                             addedIds = newCards.map(c => (c.student as any).id);
                             const merged = [...prev, ...newCards];
@@ -1153,15 +1139,7 @@ const SignatureAI = () => {
                                   s3Key: s.s3_key,
                                   label: s.label as 'genuine'
                                 }));
-                              const forgedFiles = validSignatures
-                                .filter(s => s.label === 'forged')
-                                .map(s => ({
-                                  file: new File([], s.s3_url),
-                                  preview: s.s3_url,
-                                  id: s.id,
-                                  s3Key: s.s3_key,
-                                  label: s.label as 'forged'
-                                }));
+                              // Removed forgedFiles - owner identification only
                               
                               // Update the card with actual images
                               setStudentCards(prev => prev.map(card => 
@@ -1169,9 +1147,7 @@ const SignatureAI = () => {
                                   ? { 
                                       ...card, 
                                       genuineFiles: genuineFiles,
-                                      forgedFiles: forgedFiles,
-                                      genuineCount: genuineFiles.length,
-                                      forgedCount: forgedFiles.length
+                                      genuineCount: genuineFiles.length
                                     }
                                   : card
                               ));
@@ -1183,9 +1159,9 @@ const SignatureAI = () => {
                                   ? { 
                                       ...card, 
                                       genuineFiles: [],
-                                      forgedFiles: [],
+                                      // Removed forgedFiles - owner identification only
                                       genuineCount: 0,
-                                      forgedCount: 0
+                                      // Removed forgedCount - owner identification only
                                     }
                                   : card
                               ));
@@ -1919,7 +1895,7 @@ const SignatureAI = () => {
                           }
                           return ([
                             ...base,
-                            ...selected.map(s => ({ id: `${Date.now()}-${s.id}`, student: s, genuineFiles: [], forgedFiles: [], isExpanded: true }))
+                            ...selected.map(s => ({ id: `${Date.now()}-${s.id}`, student: s, genuineFiles: [], isExpanded: true }))
                           ]);
                         });
                         setIsStudentDialogOpen(false);
@@ -2038,22 +2014,20 @@ const SignatureAI = () => {
                         <div className="flex items-center justify-between">
                           <Label className="text-sm">Training Images</Label>
                           <div className="text-xs text-muted-foreground">
-                            <span className={`${trainingImagesSet==='genuine' ? 'font-semibold' : ''}`}>Genuine ({card.genuineFiles.length})</span>
-                            <span className="mx-1">/</span>
-                            <span className={`${trainingImagesSet==='forged' ? 'font-semibold' : ''} opacity-50`}>Forged ({card.forgedFiles.length}) - Disabled</span>
+                            <span className="font-semibold">Genuine ({card.genuineFiles.length})</span>
                           </div>
                         </div>
                         <div className="relative w-full h-[480px] border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 group overflow-hidden">
-                          {((trainingImagesSet === 'genuine') ? card.genuineFiles.length : card.forgedFiles.length) > 0 ? (
+                          {card.genuineFiles.length > 0 ? (
                             <div className="grid grid-cols-4 gap-2 w-full h-full p-2 overflow-y-auto">
-                              {((trainingImagesSet === 'genuine') ? card.genuineFiles : card.forgedFiles).map((item, index) => (
+                              {card.genuineFiles.map((item, index) => (
                                 <div 
                                   key={index} 
                                   className="relative group/itm cursor-pointer pb-[100%] overflow-hidden rounded-md border border-border"
                                   onClick={() => openImageModal(
-                                    ((trainingImagesSet === 'genuine') ? card.genuineFiles : card.forgedFiles).map(f => f.preview), 
+                                    card.genuineFiles.map(f => f.preview), 
                                     index, 
-                                    { kind: 'training', setType: trainingImagesSet, cardId: card.id }
+                                    { kind: 'training', setType: 'genuine', cardId: card.id }
                                   )}
                                 >
                                   {item.placeholder ? (
