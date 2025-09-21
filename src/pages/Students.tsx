@@ -60,7 +60,7 @@ const Students = () => {
   const [uniqueYears, setUniqueYears] = useState<string[]>([]);
 
   // Sorting state
-  type StudentSortKey = 'name' | 'student_id' | 'program' | 'year_section';
+  type StudentSortKey = 'name' | 'student_id' | 'program' | 'year' | 'section' | 'sex';
   const [sortKey, setSortKey] = useState<StudentSortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -354,12 +354,14 @@ const Students = () => {
           return a.student_id.localeCompare(b.student_id) * dir;
         case 'program':
           return a.program.localeCompare(b.program) * dir;
-        case 'year_section':
-          // Compare year then section
+        case 'year':
           const ya = (a.year || '').toString();
           const yb = (b.year || '').toString();
-          if (ya !== yb) return ya.localeCompare(yb) * dir;
+          return ya.localeCompare(yb) * dir;
+        case 'section':
           return (a.section || '').localeCompare(b.section || '') * dir;
+        case 'sex':
+          return (a.sex || '').localeCompare(b.sex || '') * dir;
         default:
           return 0;
       }
@@ -548,9 +550,33 @@ const Students = () => {
                   </th>
                   <th scope="col" className="px-3 py-2 text-left font-semibold uppercase">
                     <div className="flex items-center gap-1">
-                      Year & Section
-                      <button type="button" onClick={() => handleSort('year_section')} className="p-0.5 text-gray-500 hover:text-black">
-                        {sortKey === 'year_section' ? (
+                      Year
+                      <button type="button" onClick={() => handleSort('year')} className="p-0.5 text-gray-500 hover:text-black">
+                        {sortKey === 'year' ? (
+                          sortDir === 'asc' ? <ChevronsUp className="w-3.5 h-3.5 text-black" /> : <ChevronsDown className="w-3.5 h-3.5 text-black" />
+                        ) : (
+                          <ChevronsUp className="w-3.5 h-3.5 opacity-40 text-black" />
+                        )}
+                      </button>
+                    </div>
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-semibold uppercase">
+                    <div className="flex items-center gap-1">
+                      Section
+                      <button type="button" onClick={() => handleSort('section')} className="p-0.5 text-gray-500 hover:text-black">
+                        {sortKey === 'section' ? (
+                          sortDir === 'asc' ? <ChevronsUp className="w-3.5 h-3.5 text-black" /> : <ChevronsDown className="w-3.5 h-3.5 text-black" />
+                        ) : (
+                          <ChevronsUp className="w-3.5 h-3.5 opacity-40 text-black" />
+                        )}
+                      </button>
+                    </div>
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-semibold uppercase">
+                    <div className="flex items-center gap-1">
+                      Sex
+                      <button type="button" onClick={() => handleSort('sex')} className="p-0.5 text-gray-500 hover:text-black">
+                        {sortKey === 'sex' ? (
                           sortDir === 'asc' ? <ChevronsUp className="w-3.5 h-3.5 text-black" /> : <ChevronsDown className="w-3.5 h-3.5 text-black" />
                         ) : (
                           <ChevronsUp className="w-3.5 h-3.5 opacity-40 text-black" />
@@ -563,7 +589,7 @@ const Students = () => {
               <tbody className="bg-white divide-y divide-gray-200 text-xs text-gray-500">
                 {loading ? null : students.length === 0 ? (
                 <tr className="h-8">
-                  <td colSpan={4} className="px-3 py-1 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-3 py-1 text-center text-sm text-gray-500">
                     {pagination.totalCount === 0 
                       ? 'No students found. Add your first student!'
                       : 'No students match the current filters. Try adjusting your search or filters.'}
@@ -597,19 +623,21 @@ const Students = () => {
                           <span className="truncate max-w-[120px] inline-block">{student.program}</span>
                         </td>
                         <td className="px-3 py-1 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <span>{student.year}</span>
-                            <span className="text-gray-300">•</span>
-                            <span> {student.section || 'N/A'}</span>
-                          </div>
+                          {student.year}
+                        </td>
+                        <td className="px-3 py-1 whitespace-nowrap">
+                          {student.section || 'N/A'}
+                        </td>
+                        <td className="px-3 py-1 whitespace-nowrap">
+                          {student.sex || 'N/A'}
                         </td>
                       </tr>
                     ))}
-                    {sortedStudents.length < 10 && Array.from({ length: 10 - sortedStudents.length }).map((_, idx) => (
-                      <tr key={`filler-${idx}`} className="h-8">
-                        <td colSpan={4} className="px-3 py-1">&nbsp;</td>
-                      </tr>
-                    ))}
+                     {sortedStudents.length < 10 && Array.from({ length: 10 - sortedStudents.length }).map((_, idx) => (
+                       <tr key={`filler-${idx}`} className="h-8">
+                         <td colSpan={6} className="px-3 py-1">&nbsp;</td>
+                       </tr>
+                     ))}
                   </>
                 )}
               </tbody>
