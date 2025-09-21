@@ -418,42 +418,34 @@ const TakeAttendanceSession = () => {
     try {
       console.log('Starting AI signature verification...');
       
-      // Convert data URL to File object
-      const response = await fetch(imageDataUrl);
-      const blob = await response.blob();
-      const file = new File([blob], 'signature.png', { type: 'image/png' });
-      
       // Call AI service for verification
-      const result = await aiService.verifySignature(file);
+      const result = await aiService.verifySignatureFromDataURL(
+        imageDataUrl,
+        sessionId ? parseInt(sessionId) : undefined
+      );
       
       console.log('AI verification result:', result);
       
       // Update stats
-      const hasMatch = result.success && !!result.student_id;
       setStats(prev => ({
         ...prev,
         totalScanned: prev.totalScanned + 1,
-        matched: prev.matched + (hasMatch ? 1 : 0),
-        noMatch: prev.noMatch + (!hasMatch ? 1 : 0),
+        matched: prev.matched + (result.match ? 1 : 0),
+        noMatch: prev.noMatch + (!result.match ? 1 : 0),
         // Removed potentialForgery - owner identification only
       }));
       
       if (result.success) {
         setVerificationResult({
-          match: hasMatch,
-          student: result.student_id ? {
-            id: parseInt(result.student_id),
-            student_id: result.student_id,
-            firstname: result.student_name?.split(' ')[0] || '',
-            surname: result.student_name?.split(' ').slice(1).join(' ') || ''
-          } : null,
-          score: result.confidence || 0,
+          match: result.match,
+          student: result.predicted_student,
+          score: result.score,
           message: result.message,
         });
         
-        if (hasMatch && result.student_id) {
+        if (result.match && result.predicted_student) {
           setAttendanceStatus('success');
-          toast.success(`Signature matched: ${result.student_name} (${result.student_id})`);
+          toast.success(`Signature matched: ${result.predicted_student.firstname} ${result.predicted_student.surname} (${result.predicted_student.student_id})`);
         } else {
           setAttendanceStatus('error');
           toast.warning('Signature not recognized. Please try again or mark attendance manually.');
