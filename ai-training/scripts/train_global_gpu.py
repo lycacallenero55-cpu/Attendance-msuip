@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Teachable Signature Model GPU Training Script
-Replicates Teachable Machine behavior for signature verification
+Global Signature Classifier GPU Training Script
+Multi-student signature classification with GPU acceleration
 """
 
 import sys
@@ -23,7 +23,7 @@ from pathlib import Path
 # Add the current directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.teachable_signature_model import TeachableSignatureModel
+from models.global_signature_classifier import GlobalSignatureClassifier
 from utils.signature_preprocessing import SignaturePreprocessor
 
 # Configure TensorFlow for GPU
@@ -72,11 +72,11 @@ def preprocess_images(images_data: list, preprocessor: SignaturePreprocessor) ->
     
     return processed_images
 
-def train_teachable_model(training_data: dict, job_id: str, student_id: str = None) -> dict:
+def train_global_model(training_data: dict, job_id: str, student_id: str = None) -> dict:
     """
-    Train the Teachable Signature Model
+    Train the Global Signature Classifier
     """
-    print("🚀 Starting Teachable Signature Model Training")
+    print("🚀 Starting Global Signature Classifier Training")
     print(f"Job ID: {job_id}")
     print(f"Student ID: {student_id}")
     
@@ -84,8 +84,8 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
         # Initialize preprocessor
         preprocessor = SignaturePreprocessor(target_size=224)
         
-        # Initialize Teachable model
-        model = TeachableSignatureModel(
+        # Initialize Global model
+        model = GlobalSignatureClassifier(
             image_size=224,
             embedding_dim=512,
             learning_rate=0.001,
@@ -112,7 +112,7 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
             raise ValueError("No valid training data found")
         
         # Train global model
-        print("🎯 Training global Teachable model...")
+        print("🎯 Training global classifier...")
         history = model.train_global_model(
             training_data=processed_training_data,
             epochs=50,
@@ -129,7 +129,7 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
         print(f"Number of students: {model.num_classes}")
         
         # Save model locally
-        model_path = f"/tmp/teachable_model_{job_id}"
+        model_path = f"/tmp/global_model_{job_id}"
         model.save_model(model_path)
         
         # Upload model to S3
@@ -146,7 +146,7 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
         for file_path in model_files:
             if os.path.exists(file_path):
                 filename = os.path.basename(file_path)
-                s3_key = f"models/teachable/{job_id}/{filename}"
+                s3_key = f"models/global/{job_id}/{filename}"
                 
                 s3_client.upload_file(file_path, bucket_name, s3_key)
                 uploaded_files[filename] = s3_key
@@ -155,7 +155,7 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
         # Create training results
         results = {
             "job_id": job_id,
-            "model_type": "teachable_global",
+            "model_type": "global_classifier",
             "training_status": "completed",
             "final_accuracy": float(final_accuracy),
             "final_val_accuracy": float(final_val_accuracy),
@@ -171,7 +171,7 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
         }
         
         # Save results to S3
-        results_key = f"training_results/teachable/{job_id}/results.json"
+        results_key = f"training_results/global/{job_id}/results.json"
         s3_client.put_object(
             Bucket=bucket_name,
             Key=results_key,
@@ -196,7 +196,7 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
         # Save error results
         error_results = {
             "job_id": job_id,
-            "model_type": "teachable_global",
+            "model_type": "global_classifier",
             "training_status": "failed",
             "error": error_msg,
             "traceback": traceback.format_exc()
@@ -205,7 +205,7 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
         try:
             s3_client = boto3.client('s3')
             bucket_name = os.getenv('S3_BUCKET', 'your-bucket-name')
-            error_key = f"training_results/teachable/{job_id}/error.json"
+            error_key = f"training_results/global/{job_id}/error.json"
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=error_key,
@@ -220,14 +220,14 @@ def train_teachable_model(training_data: dict, job_id: str, student_id: str = No
 def main():
     """Main training function"""
     if len(sys.argv) != 4:
-        print("Usage: train_teachable_gpu.py <training_data_key> <job_id> <student_id>")
+        print("Usage: train_global_gpu.py <training_data_key> <job_id> <student_id>")
         sys.exit(1)
     
     training_data_key = sys.argv[1]
     job_id = sys.argv[2]
     student_id = sys.argv[3]
     
-    print("🎓 Teachable Signature Model GPU Training")
+    print("🎓 Global Signature Classifier GPU Training")
     print("=" * 50)
     print(f"Training data key: {training_data_key}")
     print(f"Job ID: {job_id}")
@@ -243,7 +243,7 @@ def main():
         training_data = download_training_data(s3_client, bucket_name, training_data_key)
         
         # Train model
-        results = train_teachable_model(training_data, job_id, student_id)
+        results = train_global_model(training_data, job_id, student_id)
         
         print("🎉 Training completed successfully!")
         print(f"Results: {json.dumps(results, indent=2)}")

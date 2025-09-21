@@ -1,6 +1,6 @@
 """
-Teachable Signature Model - Global Classification Approach
-Replicates Teachable Machine behavior for signature verification
+Global Signature Classifier - Multi-Student Classification Model
+Efficient global model for signature verification across multiple students
 """
 
 import tensorflow as tf
@@ -16,9 +16,9 @@ import pickle
 
 logger = logging.getLogger(__name__)
 
-class TeachableSignatureModel:
+class GlobalSignatureClassifier:
     """
-    Global signature classification model that behaves like Teachable Machine:
+    Global signature classification model for multi-student verification:
     - One global model for all students
     - Few-shot learning capability
     - Incremental learning (add new students)
@@ -41,7 +41,7 @@ class TeachableSignatureModel:
         self.classifier = None
         self.global_model = None
         
-        # Student management (like Teachable Machine classes)
+        # Student management (class-based approach)
         self.student_to_class = {}  # student_id -> class_index
         self.class_to_student = {}  # class_index -> student_id
         self.student_names = {}     # student_id -> student_name
@@ -52,7 +52,7 @@ class TeachableSignatureModel:
         
     def create_feature_extractor(self) -> keras.Model:
         """
-        Create the feature extraction backbone (like Teachable Machine)
+        Create the feature extraction backbone
         Uses MobileNetV2 for efficient feature extraction
         """
         inputs = keras.Input(shape=(self.image_size, self.image_size, 3))
@@ -84,7 +84,7 @@ class TeachableSignatureModel:
     
     def create_classifier(self, num_classes: int) -> keras.Model:
         """
-        Create the classification head (like Teachable Machine)
+        Create the classification head
         This is retrained when new students are added
         """
         inputs = keras.Input(shape=(self.embedding_dim,), name='features')
@@ -124,7 +124,7 @@ class TeachableSignatureModel:
     
     def add_student(self, student_id: str, student_name: str) -> int:
         """
-        Add a new student to the global model (like adding a class in Teachable Machine)
+        Add a new student to the global model
         Returns the class index for this student
         """
         if student_id in self.student_to_class:
@@ -220,7 +220,7 @@ class TeachableSignatureModel:
     def incremental_train(self, new_student_data: Dict, epochs: int = 20) -> Dict:
         """
         Incrementally train the model with new student data
-        This is like adding a new class in Teachable Machine
+        This adds new students without retraining everything
         """
         logger.info("Starting incremental training...")
         
