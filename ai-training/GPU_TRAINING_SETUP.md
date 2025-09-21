@@ -3,8 +3,14 @@
 ## 🎯 Quick Summary
 
 **For YOU (One-time setup):**
-1. **Launch GPU instance** with Deep Learning AMI
-2. **Install dependencies** (if using Ubuntu)
+1. **Launch Deep Learning AMI** (`ami-00f0918871e41f60d`) - **RECOMMENDED**
+2. **Activate TensorFlow** environment (`source /opt/tensorflow/bin/activate`)
+3. **Clone repository** and configure environment
+4. **Test setup** with provided test script
+
+**Alternative (Manual Ubuntu setup):**
+1. **Launch Ubuntu 22.04** + manual driver installation (⚠️ Complex!)
+2. **Install dependencies** (NVIDIA drivers, CUDA, cuDNN, TensorFlow)
 3. **Clone repository** and configure environment
 4. **Test setup** with provided test script
 
@@ -76,19 +82,21 @@ Ensure your security group allows:
 
 #### 1. Launch GPU Instance
 
-**Option A: Use Deep Learning AMI (Recommended)**
+**✅ Option A: Use Deep Learning AMI (HIGHLY RECOMMENDED)**
 ```bash
 # Launch instance with Deep Learning AMI
 # AMI ID: ami-00f0918871e41f60d
 # Instance Type: g4dn.xlarge or g4dn.2xlarge
 # Storage: 30GB+ EBS volume
+# Benefits: Pre-installed drivers, CUDA, cuDNN, TensorFlow 2.18
 ```
 
-**Option B: Use Ubuntu + Manual Setup**
+**⚠️ Option B: Use Ubuntu + Manual Setup (NOT RECOMMENDED)**
 ```bash
 # Launch Ubuntu 22.04 LTS
 # AMI ID: ami-0bbdd8b17ed981ef9
 # Then follow manual setup steps below
+# Warning: Driver compatibility issues, complex setup
 ```
 
 #### 2. Connect to Instance
@@ -98,8 +106,13 @@ Ensure your security group allows:
 ssh -i "your-key.pem" ubuntu@your-instance-ip
 ```
 
-#### 3. Install Dependencies (If using Ubuntu)
+#### 3. Install Dependencies (If using Ubuntu - NOT RECOMMENDED)
 
+⚠️ **WARNING: Manual driver installation is complex and error-prone!**
+
+**RECOMMENDED: Use Deep Learning AMI instead (see Option A above)**
+
+If you must use Ubuntu manually:
 ```bash
 # Update system
 sudo apt update && sudo apt upgrade -y
@@ -107,7 +120,7 @@ sudo apt update && sudo apt upgrade -y
 # Install Python and pip
 sudo apt install -y python3-pip python3-dev git
 
-# Install NVIDIA drivers (if not using Deep Learning AMI)
+# Install NVIDIA drivers (WARNING: Driver compatibility issues!)
 sudo apt install -y nvidia-driver-525
 sudo reboot
 
@@ -133,6 +146,8 @@ pip3 install boto3 numpy pillow opencv-python scikit-learn requests
 # Verify GPU setup
 python3 -c "import tensorflow as tf; print('TensorFlow version:', tf.__version__); print('GPUs:', tf.config.list_physical_devices('GPU'))"
 ```
+
+**⚠️ This manual approach often fails due to driver compatibility issues!**
 
 #### 4. Clone Your Repository
 
