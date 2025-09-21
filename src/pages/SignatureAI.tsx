@@ -50,7 +50,7 @@ type TrainedModel = {
   accuracy?: number;
 };
 
-function SignatureAI() {
+const SignatureAI = () => {
   const { toast } = useToast();
   
   // Multi-Student Training State
@@ -960,11 +960,12 @@ function SignatureAI() {
         if (idx !== -1) removeTrainingFile(idx, 'genuine', modalContext.cardId);
         const updated = card.genuineFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
         setModalImages(updated);
-      }
     }
     setModalImageIndex(prev => Math.max(0, prev - (modalImages.length === 1 ? 0 : 1)));
     if (modalImages.length <= 1) closeImageModal();
   };
+
+  const handleVerifySignature = async () => {
     if (!verificationFile) {
       toast({
         title: "Error",
@@ -1649,7 +1650,7 @@ function SignatureAI() {
                     <div className="text-sm font-semibold">Verification Result</div>
                     {verificationResult ? (
                       <Alert className={
-                        verificationResult.student_id 
+                        verificationResult.match 
                           ? "border-green-200 bg-green-50" 
                           : "border-red-200 bg-red-50"
                       }>
@@ -2105,6 +2106,7 @@ function SignatureAI() {
       </div>
     </Layout>
   );
+};
 }
 
 export default SignatureAI;
