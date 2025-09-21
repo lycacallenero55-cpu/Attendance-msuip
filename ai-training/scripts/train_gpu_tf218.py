@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 GPU Training Script - TensorFlow 2.18 Compatible
-Optimized for AWS Deep Learning AMI with GPU support
+Global Signature Classifier for Multi-Student Verification
 """
 
 import sys
@@ -17,6 +17,12 @@ from tensorflow import keras
 import tempfile
 import shutil
 import base64
+from pathlib import Path
+
+# Add the current directory to Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from models.global_signature_classifier import GlobalSignatureClassifier
 
 # Configure TensorFlow for GPU
 gpus = tf.config.list_physical_devices('GPU')
@@ -142,160 +148,42 @@ class SignaturePreprocessor:
             self.error_count += 1
             return None
 
-class SignatureEmbeddingModel:
-    def __init__(self, max_students=150):
-        self.max_students = max_students
-        self.embedding_dim = 128
-        self.student_to_id = {}
-        self.id_to_student = {}
-        self.embedding_model = None
-        self.classification_head = None
-        self.siamese_model = None
+def process_training_data_for_global_model(training_data_raw, preprocessor):
+    """
+    Process training data for Global Signature Classifier
+    Returns data in format: {student_id: [images]}
+    """
+    print("Processing training data for Global Signature Classifier...")
+    processed_data = {}
     
-    def train_models(self, training_data, epochs=25, validation_split=0.2):
-        print("Starting model training...")
-        all_images = []
-        all_labels = []
+    for student_name, data in training_data_raw.items():
+        print(f"\nProcessing student: {student_name}")
+        student_images = []
         
-        print(f"Processing {len(training_data)} students...")
-        for idx, (student_name, data) in enumerate(training_data.items()):
-            self.student_to_id[student_name] = idx
-            self.id_to_student[idx] = student_name
-            genuine_count = len(data.get('genuine', []))
-            forged_count = len(data.get('forged', []))
-            print(f"Student {student_name} (ID: {idx}): {genuine_count} genuine, {forged_count} forged")
-            
-            # Process genuine images
-            for i, img in enumerate(data.get('genuine', [])):
-                if img is not None:
-                    all_images.append(img)
-                    all_labels.append(idx)
-                else:
-                    print(f"    Skipping None genuine image {i} for {student_name}")
-            
-            # Process forged images
-            for i, img in enumerate(data.get('forged', [])):
-                if img is not None:
-                    all_images.append(img)
-                    all_labels.append(idx)
-                else:
-                    print(f"    Skipping None forged image {i} for {student_name}")
+        # Process genuine images only (no forgery detection)
+        genuine_raw = data.get('genuine', [])
+        print(f"  Found {len(genuine_raw)} genuine images")
         
-        print(f"Total images for training: {len(all_images)}")
-        print(f"Unique student IDs: {len(set(all_labels))}")
-        
-        if len(all_images) == 0:
-            raise ValueError("No valid training samples found after processing")
-        
-        if len(all_images) < 5:
-            print("WARNING: Very few samples for training. Results may be poor.")
-            validation_split = 0.0
-        
-        print("Converting to numpy arrays...")
-        X = np.array(all_images)
-        y = keras.utils.to_categorical(all_labels, num_classes=len(training_data))
-        
-        print(f"Final training data shape: {X.shape}")
-        print(f"Labels shape: {y.shape}")
-        print(f"Data type: {X.dtype}, range: [{float(X.min()):.3f}, {float(X.max()):.3f}]")
-        
-        # Build CNN model
-        model = keras.Sequential([
-            keras.layers.InputLayer(input_shape=(224, 224, 3)),
-            keras.layers.Conv2D(32, (3,3), activation='relu', padding='same'),
-            keras.layers.BatchNormalization(),
-            keras.layers.MaxPooling2D((2,2)),
-            keras.layers.Dropout(0.25),
-            keras.layers.Conv2D(64, (3,3), activation='relu', padding='same'),
-            keras.layers.BatchNormalization(),
-            keras.layers.MaxPooling2D((2,2)),
-            keras.layers.Dropout(0.25),
-            keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-            keras.layers.BatchNormalization(),
-            keras.layers.GlobalAveragePooling2D(),
-            keras.layers.Dropout(0.5),
-            keras.layers.Dense(256, activation='relu'),
-            keras.layers.BatchNormalization(),
-            keras.layers.Dropout(0.5),
-            keras.layers.Dense(len(training_data), activation='softmax')
-        ])
-        
-        model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
-            loss='categorical_crossentropy',
-            metrics=['accuracy']
-        )
-        
-        print("Model summary:")
-        model.summary()
-        
-        print(f"Starting training with validation_split={validation_split}")
-        
-        # Setup callbacks
-        callbacks = [
-            keras.callbacks.EarlyStopping(
-                monitor='val_accuracy' if validation_split > 0 else 'accuracy',
-                patience=5,
-                restore_best_weights=True
-            ),
-            keras.callbacks.ReduceLROnPlateau(
-                monitor='val_loss' if validation_split > 0 else 'loss',
-                factor=0.5,
-                patience=3,
-                min_lr=0.0001
-            ),
-        ]
-        
-        try:
-            if validation_split > 0:
-                history = model.fit(
-                    X, y,
-                    batch_size=min(32, len(X)),
-                    epochs=epochs,
-                    validation_split=validation_split,
-                    callbacks=callbacks,
-                    verbose=1
-                )
+        for i, img_data in enumerate(genuine_raw):
+            print(f"    Processing genuine image {i+1}/{len(genuine_raw)}")
+            processed_img = preprocessor.preprocess_signature(
+                img_data, 
+                debug_name=f"{student_name}_genuine_{i}"
+            )
+            if processed_img is not None:
+                student_images.append(processed_img)
+                print("      ✓ Successfully processed")
             else:
-                history = model.fit(
-                    X, y,
-                    batch_size=min(32, len(X)),
-                    epochs=epochs,
-                    callbacks=callbacks,
-                    verbose=1
-                )
-        except Exception as e:
-            print(f"Training failed: {e}")
-            traceback.print_exc()
-            raise
+                print("      ✗ Failed to process")
         
-        self.classification_head = model
-        self.embedding_model = keras.Model(
-            inputs=model.input,
-            outputs=model.layers[-3].output
-        )
-        
-        print("Training completed successfully!")
-        return {'classification_history': history.history, 'siamese_history': {}}
+        if student_images:
+            processed_data[student_name] = student_images
+            print(f"  Final: {len(student_images)} valid images for {student_name}")
+        else:
+            print(f"  ⚠️  No valid images for {student_name}, skipping")
     
-    def save_models(self, base_path):
-        """Save models to disk"""
-        if self.classification_head:
-            self.classification_head.save(f"{base_path}_classification.keras")
-            print(f"Saved classification model to {base_path}_classification.keras")
-        
-        if self.embedding_model:
-            self.embedding_model.save(f"{base_path}_embedding.keras")
-            print(f"Saved embedding model to {base_path}_embedding.keras")
-        
-        # Save mappings
-        mappings = {
-            'student_to_id': self.student_to_id,
-            'id_to_student': self.id_to_student
-        }
-        with open(f"{base_path}_mappings.json", 'w') as f:
-            json.dump(mappings, f, indent=2)
-        print(f"Saved mappings to {base_path}_mappings.json")
+    print(f"\nProcessed {len(processed_data)} students with valid data")
+    return processed_data
 
 def train_on_gpu(training_data_key, job_id, student_id):
     try:
@@ -319,114 +207,79 @@ def train_on_gpu(training_data_key, job_id, student_id):
         print(f"Raw training data contains {len(training_data_raw)} students")
         
         preprocessor = SignaturePreprocessor(target_size=(224, 224))
-        model_manager = SignatureEmbeddingModel(max_students=150)
         
-        print("Processing training data...")
-        processed_data = {}
-        
-        for student_name, data in training_data_raw.items():
-            print(f"\nProcessing student: {student_name}")
-            genuine_images = []
-            forged_images = []
-            
-            genuine_raw = data.get('genuine', [])
-            print(f"  Found {len(genuine_raw)} genuine images")
-            for i, img_data in enumerate(genuine_raw):
-                print(f"    Processing genuine image {i+1}/{len(genuine_raw)}")
-                processed_img = preprocessor.preprocess_signature(
-                    img_data, 
-                    debug_name=f"{student_name}_genuine_{i}"
-                )
-                if processed_img is not None:
-                    genuine_images.append(processed_img)
-                    print("      ✓ Successfully processed")
-                else:
-                    print("      ✗ Failed to process")
-            
-            forged_raw = data.get('forged', [])
-            print(f"  Found {len(forged_raw)} forged images")
-            for i, img_data in enumerate(forged_raw):
-                print(f"    Processing forged image {i+1}/{len(forged_raw)}")
-                processed_img = preprocessor.preprocess_signature(
-                    img_data, 
-                    debug_name=f"{student_name}_forged_{i}"
-                )
-                if processed_img is not None:
-                    forged_images.append(processed_img)
-                    print("      ✓ Successfully processed")
-                else:
-                    print("      ✗ Failed to process")
-            
-            processed_data[student_name] = {
-                'genuine': genuine_images, 
-                'forged': forged_images
-            }
-            
-            total_processed = len(genuine_images) + len(forged_images)
-            total_raw = len(genuine_raw) + len(forged_raw)
-            success_rate = (total_processed / total_raw * 100) if total_raw > 0 else 0
-            
-            print(f"  Final: {len(genuine_images)} genuine, {len(forged_images)} forged")
-            print(f"  Success rate: {total_processed}/{total_raw} ({success_rate:.1f}%)")
+        # Process training data for Global Signature Classifier
+        processed_data = process_training_data_for_global_model(training_data_raw, preprocessor)
         
         print("\n=== PREPROCESSING SUMMARY ===")
         print(f"Total images processed successfully: {preprocessor.processed_count}")
         print(f"Total processing errors: {preprocessor.error_count}")
         
-        total_samples = sum(len(d['genuine']) + len(d['forged']) for d in processed_data.values())
+        total_samples = sum(len(images) for images in processed_data.values())
         print(f"Total processed samples available for training: {total_samples}")
         
         if total_samples == 0:
             raise ValueError("No valid training samples found after processing")
         
-        validation_split = 0.0 if total_samples < 5 else 0.2
-        
-        print("\n=== STARTING MODEL TRAINING ===")
-        training_result = model_manager.train_models(
-            processed_data, 
-            epochs=25, 
-            validation_split=validation_split
+        # Initialize Global Signature Classifier
+        print("\n=== INITIALIZING GLOBAL SIGNATURE CLASSIFIER ===")
+        global_model = GlobalSignatureClassifier(
+            image_size=224,
+            embedding_dim=512,
+            learning_rate=0.001,
+            max_students=1000
         )
         
-        print("Training completed! Saving models...")
+        # Add all students to the global model
+        for student_name in processed_data.keys():
+            global_model.add_student(student_name, student_name)
+        
+        print(f"Added {global_model.num_classes} students to global model")
+        
+        # Train the global model
+        print("\n=== STARTING GLOBAL MODEL TRAINING ===")
+        training_history = global_model.train_global_model(
+            training_data=processed_data,
+            epochs=50,
+            validation_split=0.2
+        )
+        
+        print("Training completed! Saving global model...")
         temp_dir = f'/tmp/{job_id}_models'
         os.makedirs(temp_dir, exist_ok=True)
-        model_manager.save_models(f'{temp_dir}/signature_model')
         
-        # Upload models to S3
-        model_files = ['embedding', 'classification']
+        # Save global model
+        model_path = f'{temp_dir}/global_signature_model'
+        global_model.save_model(model_path)
+        
+        # Upload model to S3
+        model_files = [
+            f"{model_path}.keras",
+            f"{model_path}_metadata.json"
+        ]
+        
         model_urls = {}
-        
-        for model_type in model_files:
-            file_path = f'{temp_dir}/signature_model_{model_type}.keras'
+        for file_path in model_files:
             if os.path.exists(file_path):
-                s3_key = f'models/{job_id}/{model_type}.keras'
+                filename = os.path.basename(file_path)
+                s3_key = f"models/global/{job_id}/{filename}"
                 s3.upload_file(file_path, bucket, s3_key)
-                model_urls[model_type] = f'https://{bucket}.s3.amazonaws.com/{s3_key}'
-                print(f"Uploaded {model_type} model to S3: {s3_key}")
+                model_urls[filename] = f'https://{bucket}.s3.amazonaws.com/{s3_key}'
+                print(f"Uploaded {filename} to S3: {s3_key}")
             else:
-                print(f"WARNING: {model_type} model file not found: {file_path}")
+                print(f"WARNING: Model file not found: {file_path}")
         
-        # Upload mappings
-        mappings_path = f'{temp_dir}/signature_model_mappings.json'
-        if os.path.exists(mappings_path):
-            s3_key = f'models/{job_id}/mappings.json'
-            s3.upload_file(mappings_path, bucket, s3_key)
-            model_urls['mappings'] = f'https://{bucket}.s3.amazonaws.com/{s3_key}'
-            print(f"Uploaded mappings to S3: {s3_key}")
-        
-        # Extract accuracy metrics
-        classification_history = training_result.get('classification_history', {})
+        # Extract accuracy metrics from training history
         final_accuracy = None
-        if 'accuracy' in classification_history:
-            accuracies = classification_history['accuracy']
+        if 'accuracy' in training_history:
+            accuracies = training_history['accuracy']
             if accuracies:
                 final_accuracy = float(accuracies[-1])
                 print(f"Final training accuracy: {final_accuracy:.4f}")
         
         final_val_accuracy = None
-        if 'val_accuracy' in classification_history:
-            val_accuracies = classification_history['val_accuracy']
+        if 'val_accuracy' in training_history:
+            val_accuracies = training_history['val_accuracy']
             if val_accuracies:
                 final_val_accuracy = float(val_accuracies[-1])
                 print(f"Final validation accuracy: {final_val_accuracy:.4f}")
@@ -435,16 +288,19 @@ def train_on_gpu(training_data_key, job_id, student_id):
         results = {
             'job_id': job_id,
             'student_id': student_id,
+            'model_type': 'global_classifier',
             'model_urls': model_urls,
             'accuracy': final_accuracy,
             'val_accuracy': final_val_accuracy,
             'training_metrics': {
                 'final_accuracy': final_accuracy,
                 'final_val_accuracy': final_val_accuracy,
-                'classification_history': classification_history,
-                'epochs_trained': len(classification_history.get('loss', [])),
+                'training_history': training_history,
+                'epochs_trained': len(training_history.get('loss', [])),
                 'total_samples': total_samples,
                 'students_count': len(processed_data),
+                'num_classes': global_model.num_classes,
+                'students': list(global_model.student_names.keys()),
                 'preprocessing_stats': {
                     'processed_count': preprocessor.processed_count,
                     'error_count': preprocessor.error_count
@@ -456,12 +312,16 @@ def train_on_gpu(training_data_key, job_id, student_id):
         results_path = '/tmp/training_results.json'
         with open(results_path, 'w') as f:
             json.dump(results, f, indent=2)
-        s3.upload_file(results_path, bucket, f'training_results/{job_id}.json')
+        s3.upload_file(results_path, bucket, f'training_results/global/{job_id}.json')
         print("Uploaded training results to S3")
         
-        print("\n=== TRAINING COMPLETED SUCCESSFULLY ===")
+        print("\n=== GLOBAL SIGNATURE CLASSIFIER TRAINING COMPLETED ===")
         print(f"Job ID: {job_id}")
-        print(f"Final accuracy: {final_accuracy}")
+        print(f"Model Type: Global Classifier")
+        print(f"Final accuracy: {final_accuracy:.4f}")
+        print(f"Final validation accuracy: {final_val_accuracy:.4f}")
+        print(f"Number of students: {global_model.num_classes}")
+        print(f"Students: {list(global_model.student_names.keys())}")
         print(f"Models uploaded: {len(model_urls)} files")
         print(f"Total training samples: {total_samples}")
         
@@ -477,17 +337,19 @@ def train_on_gpu(training_data_key, job_id, student_id):
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: train_gpu_tf213.py <training_data_key> <job_id> <student_id>")
+        print("Usage: train_gpu_tf218.py <training_data_key> <job_id> <student_id>")
         sys.exit(1)
     
     training_data_key = sys.argv[1]
     job_id = sys.argv[2]
     student_id = int(sys.argv[3])
     
-    print("Starting GPU training with arguments:")
-    print(f"  Training data key: {training_data_key}")
-    print(f"  Job ID: {job_id}")
-    print(f"  Student ID: {student_id}")
-    print(f"  TensorFlow version: {tf.__version__}")
+    print("🎓 Global Signature Classifier GPU Training")
+    print("=" * 50)
+    print(f"Training data key: {training_data_key}")
+    print(f"Job ID: {job_id}")
+    print(f"Student ID: {student_id}")
+    print(f"TensorFlow version: {tf.__version__}")
+    print("=" * 50)
     
     train_on_gpu(training_data_key, job_id, student_id)
