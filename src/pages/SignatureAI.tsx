@@ -31,7 +31,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { aiService, AI_CONFIG } from '@/lib/aiService';
+import aiService from '@/lib/aiService';
 import { fetchStudents } from '@/lib/supabaseService';
 import type { Student, StudentTrainingCard as StudentTrainingCardType, TrainingFile } from '@/types';
 import { Progress } from '@/components/ui/progress';
@@ -91,7 +91,7 @@ const SignatureAI = () => {
   const [trainingStage, setTrainingStage] = useState<'idle' | 'preprocessing' | 'training' | 'validation' | 'completed' | 'error'>('idle');
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>('');
   const [jobId, setJobId] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const eventSourceRef = useRef<{ close: () => void } | null>(null);
   const trainingStartTimeRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   
@@ -114,13 +114,14 @@ const SignatureAI = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{
     success: boolean;
-    match: boolean;
-    score: number;
+    student_id?: string;
+    student_name?: string;
+    confidence?: number;
     message?: string;
-    predicted_student_id?: number | null;
+    error?: string;
+    match?: boolean;
+    score?: number;
     predicted_student?: {
-      id: number;
-      student_id: string;
       firstname: string;
       surname: string;
     };
@@ -780,15 +781,6 @@ const SignatureAI = () => {
             eventSourceRef.current = null;
             setIsTraining(false);
           }
-        },
-        (error) => {
-          console.error('Training progress error:', error);
-          setTrainingStage('error');
-          setTrainingStatus('Connection error');
-          toast({ title: "Connection Error", description: "Lost connection to training progress updates", variant: "destructive" });
-          eventSource.close();
-          eventSourceRef.current = null;
-          setIsTraining(false);
         }
       );
       eventSourceRef.current = eventSource;
@@ -874,9 +866,7 @@ const SignatureAI = () => {
             
             const stream = video.srcObject as MediaStream;
             stream?.getTracks().forEach(track => track.stop());
-            setTimeout(() => {
-              handleVerifySignature();
-            }, 0);
+            // Note: Auto-verify removed to avoid timing issues
           }
         });
       }
@@ -990,8 +980,8 @@ const SignatureAI = () => {
       if (result.success) {
         toast({
           title: "Verification Complete",
-          description: result.match 
-            ? "Match found" 
+          description: result.student_id
+            ? "Match found"
             : "No match found",
         });
       } else {
@@ -1055,7 +1045,7 @@ const SignatureAI = () => {
                       <DropdownMenuItem disabled={isLocked} onClick={async () => {
                         if (isLocked) return;
                         try {
-                          const items = await aiService.listStudentsWithImages(true);
+                          const items = await aiService.listStudentsWithImages();
                           const byId = new Map(allStudents.map(s => [s.id, s]));
                           
                           // Filter out students with missing S3 images and validate counts
@@ -1064,14 +1054,13 @@ const SignatureAI = () => {
                             if (item.student_id && byId.has(item.student_id)) {
                               const student = byId.get(item.student_id);
                               const genuineCount = item.genuine_count || 0;
-                              const forgedCount = item.forged_count || 0;
+                              // Removed forged_count - owner identification only
                               
                               // Only include students with actual images (not just DB records)
-                              if (student && (genuineCount > 0 || forgedCount > 0)) {
+                              if (student && genuineCount > 0) {
                                 validItems.push({
                                   student: student,
-                                  genuine_count: genuineCount,
-                                  forged_count: forgedCount
+                                  genuine_count: genuineCount
                                 });
                               }
                             }
@@ -1095,7 +1084,6 @@ const SignatureAI = () => {
                               .map(x => ({ 
                                 id: `${Date.now()}-${x.student.id}`, 
                                 student: x.student, 
-                                genuineFiles: [], 
                                 // Removed forgedFiles - owner identification only 
                                 isExpanded: true, 
                                 genuineCount: x.genuine_count, 
@@ -2042,9 +2030,9 @@ const SignatureAI = () => {
                                         const parent = target.parentElement;
                                         if (parent) {
                                           parent.innerHTML = '<div class="absolute inset-0 w-full h-full flex items-center justify-center bg-red-100 text-[10px] text-red-600 text-center p-1">Image not found</div>';
-                                        }
-                                      }}
-                                    />
+                                         }
+                                       }}
+                                     />
                                   )}
                                   <button
                                     type="button"
@@ -2113,5 +2101,6 @@ const SignatureAI = () => {
     </Layout>
   );
 };
+}
 
 export default SignatureAI;
