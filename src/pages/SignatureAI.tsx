@@ -91,7 +91,7 @@ const SignatureAI = () => {
   const [trainingStage, setTrainingStage] = useState<'idle' | 'preprocessing' | 'training' | 'validation' | 'completed' | 'error'>('idle');
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>('');
   const [jobId, setJobId] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const eventSourceRef = useRef<{ close: () => void } | null>(null);
   const trainingStartTimeRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   
@@ -119,6 +119,12 @@ const SignatureAI = () => {
     confidence?: number;
     message?: string;
     error?: string;
+    match?: boolean;
+    score?: number;
+    predicted_student?: {
+      firstname: string;
+      surname: string;
+    };
   } | null>(null);
   const [useCamera, setUseCamera] = useState(false);
   
@@ -775,15 +781,6 @@ const SignatureAI = () => {
             eventSourceRef.current = null;
             setIsTraining(false);
           }
-        },
-        (error) => {
-          console.error('Training progress error:', error);
-          setTrainingStage('error');
-          setTrainingStatus('Connection error');
-          toast({ title: "Connection Error", description: "Lost connection to training progress updates", variant: "destructive" });
-          eventSource.close();
-          eventSourceRef.current = null;
-          setIsTraining(false);
         }
       );
       eventSourceRef.current = eventSource;
@@ -869,9 +866,7 @@ const SignatureAI = () => {
             
             const stream = video.srcObject as MediaStream;
             stream?.getTracks().forEach(track => track.stop());
-            setTimeout(() => {
-              handleVerifySignature();
-            }, 0);
+            // Note: Auto-verify removed to avoid timing issues
           }
         });
       }
@@ -1050,7 +1045,7 @@ const SignatureAI = () => {
                       <DropdownMenuItem disabled={isLocked} onClick={async () => {
                         if (isLocked) return;
                         try {
-                          const items = await aiService.listStudentsWithImages(true);
+                          const items = await aiService.listStudentsWithImages();
                           const byId = new Map(allStudents.map(s => [s.id, s]));
                           
                           // Filter out students with missing S3 images and validate counts
@@ -1059,14 +1054,13 @@ const SignatureAI = () => {
                             if (item.student_id && byId.has(item.student_id)) {
                               const student = byId.get(item.student_id);
                               const genuineCount = item.genuine_count || 0;
-                              const forgedCount = item.forged_count || 0;
+                              // Removed forged_count - owner identification only
                               
                               // Only include students with actual images (not just DB records)
-                              if (student && (genuineCount > 0 || forgedCount > 0)) {
+                              if (student && genuineCount > 0) {
                                 validItems.push({
                                   student: student,
-                                  genuine_count: genuineCount,
-                                  forged_count: forgedCount
+                                  genuine_count: genuineCount
                                 });
                               }
                             }
