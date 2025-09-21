@@ -2042,9 +2042,9 @@ const SignatureAI = () => {
                                         const parent = target.parentElement;
                                         if (parent) {
                                           parent.innerHTML = '<div class="absolute inset-0 w-full h-full flex items-center justify-center bg-red-100 text-[10px] text-red-600 text-center p-1">Image not found</div>';
-                                        }
-                                      }}
-                                    />
+                                         }
+                                       }}
+                                     />
                                   )}
                                   <button
                                     type="button"
