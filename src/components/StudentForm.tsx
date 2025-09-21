@@ -12,17 +12,12 @@ import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 
 interface StudentFormData {
   surname: string;
-  middle_initial: string;
   firstname: string;
   student_id: string;
   program: string;
   year: string;
   section: string;
   sex: string;
-  address: string;
-  birthday: string;
-  contact_no: string;
-  email: string;
 }
 
 interface StudentFormProps {
@@ -33,17 +28,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ onStudentAdded }) => {
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState<StudentFormData>({
     surname: '',
-    middle_initial: '',
     firstname: '',
     student_id: '',
     program: '',
     year: '',
     section: '',
-    sex: '',
-    address: '',
-    birthday: '',
-    contact_no: '',
-    email: ''
+    sex: ''
   });
 
   const {
@@ -91,17 +81,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ onStudentAdded }) => {
         // Reset form
         setFormData({
           surname: '',
-          middle_initial: '',
           firstname: '',
           student_id: '',
           program: '',
           year: '',
           section: '',
-          sex: '',
-          address: '',
-          birthday: '',
-          contact_no: '',
-          email: ''
+          sex: ''
         });
         setOpen(false);
         onStudentAdded();
@@ -146,7 +131,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ onStudentAdded }) => {
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="surname">Surname *</Label>
               <Input
@@ -155,17 +140,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ onStudentAdded }) => {
                 onChange={(e) => handleInputChange('surname', e.target.value)}
                 placeholder="Enter surname"
                 required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="middle_initial">M.I.</Label>
-              <Input
-                id="middle_initial"
-                value={formData.middle_initial}
-                onChange={(e) => handleInputChange('middle_initial', e.target.value)}
-                placeholder="M.I."
-                maxLength={10}
               />
             </div>
             
@@ -244,49 +218,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ onStudentAdded }) => {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
-            <Input
-              id="address"
-              value={formData.address}
-              onChange={(e) => handleInputChange('address', e.target.value)}
-              placeholder="Enter address"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="birthday">Birthday</Label>
-              <Input
-                id="birthday"
-                type="date"
-                value={formData.birthday}
-                onChange={(e) => handleInputChange('birthday', e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="contact_no">Contact No.</Label>
-              <Input
-                id="contact_no"
-                value={formData.contact_no}
-                onChange={(e) => handleInputChange('contact_no', e.target.value)}
-                placeholder="Enter contact number"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="Enter email address"
-            />
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

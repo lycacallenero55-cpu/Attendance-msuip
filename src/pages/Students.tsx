@@ -21,8 +21,7 @@ interface Student {
   program: string;
   year: string;
   section: string;
-  email?: string;
-  contact_no?: string;
+  sex?: string;
   status?: string;
 }
 
@@ -232,8 +231,7 @@ const Students = () => {
         ? data.map((student) => ({
             ...student,
             middlename: student.middlename || '',
-            email: student.email || '',
-            contact_no: student.contact_no || ''
+            sex: student.sex || ''
           }))
         : [];
       

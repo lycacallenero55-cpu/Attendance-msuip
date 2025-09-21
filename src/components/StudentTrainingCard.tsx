@@ -23,9 +23,9 @@ interface StudentTrainingCardProps {
   onUpdate: (updates: Partial<StudentTrainingCardType>) => void;
   onRemove: () => void;
   onOpenStudentDialog: () => void;
-  onTrainingFilesChange: (files: File[], setType: 'genuine' | 'forged', cardId: string) => void;
-  onRemoveTrainingFile: (index: number, setType: 'genuine' | 'forged', cardId: string) => void;
-  onOpenImageModal: (images: string[], startIndex: number, context: { kind: 'training', setType: 'genuine' | 'forged', cardId: string } | { kind: 'verification' } | null) => void;
+  onTrainingFilesChange: (files: File[], setType: 'genuine', cardId: string) => void;
+  onRemoveTrainingFile: (index: number, setType: 'genuine', cardId: string) => void;
+  onOpenImageModal: (images: string[], startIndex: number, context: { kind: 'training', setType: 'genuine', cardId: string } | { kind: 'verification' } | null) => void;
   onRemoveAllSamples: (cardId: string) => void;
   onCardClick: () => void;
   locked?: boolean;
@@ -45,7 +45,7 @@ const StudentTrainingCard: React.FC<StudentTrainingCardProps> = ({
   locked
 }) => {
   const hasUploadedImages = () => {
-    return card.genuineFiles.length > 0 || card.forgedFiles.length > 0;
+    return card.genuineFiles.length > 0;
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
@@ -78,9 +78,8 @@ const StudentTrainingCard: React.FC<StudentTrainingCardProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs mr-1">
-            <span className="text-green-600 font-medium">{card.genuineCount ?? card.genuineFiles.length}</span>
-            <span className="text-red-600 font-medium">{card.forgedCount ?? card.forgedFiles.length}</span>
-            {(card.genuineFiles.some(f => f.placeholder) || card.forgedFiles.some(f => f.placeholder)) && (
+            <span className="text-blue-600 font-medium">{card.genuineCount ?? card.genuineFiles.length}</span>
+            {card.genuineFiles.some(f => f.placeholder) && (
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="Loading images..." />
             )}
           </div>

@@ -546,7 +546,6 @@ const SignatureAI = () => {
   const openStudentFormDialog = (cardId: string) => {
     setCurrentFormCardId(cardId);
     setIsStudentFormDialogOpen(true);
-    setTrainingImagesSet('genuine');
   };
 
   // Training Functions
@@ -586,7 +585,7 @@ const SignatureAI = () => {
     for (const file of safeFiles) {
       try {
         const rec = await aiService.uploadSignature(card.student.id, setType, file);
-        uploaded.push({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: rec.label });
+        uploaded.push({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: 'genuine' });
       } catch (e: any) {
         // fallback to local preview if upload fails
         try {
@@ -604,7 +603,8 @@ const SignatureAI = () => {
     setStudentCards(prev => prev.map(card => {
       if (card.id === cardId) {
         if (setType === 'genuine') {
-        return { ...card, genuineFiles: [...card.genuineFiles, ...uploaded] };
+          return { ...card, genuineFiles: [...card.genuineFiles, ...uploaded] };
+        }
       }
       return card;
     }));
@@ -688,15 +688,13 @@ const SignatureAI = () => {
         ? await aiService.startGPUTraining(
             studentIds.join(','),
             allGenuineFiles,
-            allForgedFiles,
             true,
             useS3Upload
           )
         : await aiService.startAsyncTraining(
             studentIds.join(','),
             allGenuineFiles,
-            allForgedFiles,
-            'hybrid'
+            'global'
           );
       
       setJobId(asyncResponse.job_id);
@@ -967,10 +965,6 @@ const SignatureAI = () => {
         if (idx !== -1) removeTrainingFile(idx, 'genuine', modalContext.cardId);
         const updated = card.genuineFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
         setModalImages(updated);
-      } else {
-        // Skip forged files - owner identification only
-        setModalImages(updated);
-      }
     }
     setModalImageIndex(prev => Math.max(0, prev - (modalImages.length === 1 ? 0 : 1)));
     if (modalImages.length <= 1) closeImageModal();
@@ -1105,7 +1099,6 @@ const SignatureAI = () => {
                                 // Removed forgedFiles - owner identification only 
                                 isExpanded: true, 
                                 genuineCount: x.genuine_count, 
-                                forgedCount: x.forged_count,
                                 // Add placeholder files to show loading state
                                 genuineFiles: Array(x.genuine_count).fill(null).map((_, i) => ({
                                   file: new File([], `placeholder-${i}`),
@@ -1513,8 +1506,8 @@ const SignatureAI = () => {
                 )}
                 
                 <div className="text-center text-sm text-muted-foreground">
-                  {studentCards.filter(c => c.student).length} students • {getTotalTrainingData().genuine + getTotalTrainingData().forged} samples ready
-                  {/* Hybrid behavior is implicit; no extra label */}
+                  {studentCards.filter(c => c.student).length} students • {getTotalTrainingData().genuine} samples ready
+                  {/* Owner identification only */}
                 </div>
               </div>
             </div>
@@ -1888,8 +1881,7 @@ const SignatureAI = () => {
                           if (
                             prev.length === 1 &&
                             prev[0].student === null &&
-                            prev[0].genuineFiles.length === 0 &&
-                            prev[0].forgedFiles.length === 0
+                            prev[0].genuineFiles.length === 0
                           ) {
                             base = [];
                           }
@@ -2059,7 +2051,7 @@ const SignatureAI = () => {
                                     className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded p-1 opacity-0 group-hover/itm:opacity-100 transition-opacity"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      removeTrainingFile(index, trainingImagesSet, card.id);
+                                      removeTrainingFile(index, 'genuine', card.id);
                                     }}
                                     aria-label="Delete image"
                                   >
@@ -2077,21 +2069,19 @@ const SignatureAI = () => {
                           {/* Chevron controls on hover to toggle between sets */}
                           <button
                             className="hidden group-hover:flex absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 items-center justify-center opacity-50 cursor-not-allowed"
-                            onClick={() => setTrainingImagesSet('genuine')}
                             aria-label="Previous"
                             type="button"
                             disabled={true}
-                            title="Forgery detection disabled - only genuine signatures allowed"
+                            title="Owner identification mode - only genuine signatures"
                           >
                             <ChevronLeft className="w-4 h-4" />
                           </button>
                           <button
                             className="hidden group-hover:flex absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 items-center justify-center opacity-50 cursor-not-allowed"
-                            onClick={() => setTrainingImagesSet('genuine')}
                             aria-label="Next"
                             type="button"
                             disabled={true}
-                            title="Forgery detection disabled - only genuine signatures allowed"
+                            title="Owner identification mode - only genuine signatures"
                           >
                             <ChevronRight className="w-4 h-4" />
                           </button>

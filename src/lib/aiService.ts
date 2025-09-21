@@ -1,550 +1,178 @@
-// AI Service Configuration and Client
+// AI Service for signature processing and training
+// Focus: Owner identification only (no security detection)
 
-const AI_BASE_URL = import.meta.env.VITE_AI_BASE_URL || 'http://localhost:8000';
+const AI_SERVICE_URL = 'http://localhost:8001';
 
-export interface AITrainingResponse {
-  success: boolean;
-  message: string;
-  profile?: {
-    student_id: number;
-    status: 'untrained' | 'training' | 'ready' | 'error';
-    embedding_centroid: number[] | null;
-    num_samples: number;
-    threshold: number;
-    last_trained_at: string | null;
-    error_message: string | null;
-  };
-  error?: string;
-}
+class AIService {
+  private baseUrl = AI_SERVICE_URL;
 
-export interface AIVerificationResponse {
-  success: boolean;
-  match: boolean;
-  predicted_student_id: number | null;
-  predicted_student?: {
-    id: number;
-    student_id: string;
-    firstname: string;
-    surname: string;
-  };
-  score: number;
-}
-
-export interface AsyncTrainingResponse {
-  success: boolean;
-  job_id: string;
-  message: string;
-  stream_url: string;
-  training_type?: string;
-}
-
-export interface TrainingJob {
-  job_id: string;
-  student_id: number;
-  job_type: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  progress: number;
-  current_stage: string;
-  estimated_time_remaining: number | null;
-  start_time: string | null;
-  end_time: string | null;
-  result: any;
-  error: string | null;
-  created_at: string;
-  training_metrics?: {
-    current_epoch: number;
-    total_epochs: number;
-    accuracy: number;
-    val_accuracy: number;
-    loss: number;
-    val_loss: number;
-    precision: number;
-    recall: number;
-    auc: number;
-    val_auc: number;
-    learning_rate: number;
-    batch_progress: string;
-    epoch_progress: string;
-  };
-}
-
-export interface AIVerificationResponse {
-  success: boolean;
-  match: boolean;
-  predicted_student_id: number | null;
-  predicted_student?: {
-    id: number;
-    student_id: string;
-    firstname: string;
-    surname: string;
-  };
-  score: number;
-  decision: 'match' | 'no_match' | 'error';
-  message: string;
-  error?: string;
-}
-
-export class AIService {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = AI_BASE_URL) {
-    this.baseUrl = baseUrl;
+  // Helper to get backend URL
+  private getUrl(path: string): string {
+    return `${this.baseUrl}${path}`;
   }
 
-  /**
-   * Get trained models (optionally by student_id)
-   */
-  async getTrainedModels(studentId?: number): Promise<any[]> {
-    try {
-      const url = studentId
-        ? `${this.baseUrl}/api/training/models?student_id=${studentId}`
-        : `${this.baseUrl}/api/training/models`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Failed to fetch models');
-      }
-      return data.models || [];
-    } catch (error) {
-      console.error('AI getTrainedModels error:', error);
-      return [];
+  // Health check
+  async healthCheck() {
+    const res = await fetch(this.getUrl('/health'));
+    if (!res.ok) throw new Error('AI service not available');
+    return res.json();
+  }
+
+  // Preview generation for images
+  async getPreviewURL(file: File): Promise<string> {
+    if (file.type.startsWith('image/') && file.type !== 'image/tiff' && 
+        !file.name.toLowerCase().endsWith('.tif') && !file.name.toLowerCase().endsWith('.tiff')) {
+      return URL.createObjectURL(file);
     }
+    
+    // For non-image files, return a placeholder
+    return '/placeholder-signature.png';
   }
 
-  /**
-   * Get global trained models (optionally limited)
-   */
-  async getGlobalModels(limit?: number): Promise<any[]> {
-    try {
-      const url = limit
-        ? `${this.baseUrl}/api/training/global-models?limit=${limit}`
-        : `${this.baseUrl}/api/training/global-models`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Failed to fetch global models');
-      }
-      return data.models || [];
-    } catch (error) {
-      console.error('AI getGlobalModels error:', error);
-      return [];
-    }
-  }
-
-  // S3-backed student signatures -------------------------------------
-  async uploadSignature(studentId: number, label: 'genuine'|'forged', file: File) {
+  // S3-backed student signatures
+  async uploadSignature(studentId: number, label: 'genuine', file: File) {
     const form = new FormData();
     form.append('student_id', String(studentId));
     form.append('label', label);
-    form.append('file', file);
-    const res = await fetch(`${this.baseUrl}/api/uploads/signature`, { method: 'POST', body: form });
+    form.append('signature', file);
+    const res = await fetch(this.getUrl('/api/signatures/upload'), { method: 'POST', body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Upload failed');
-    return data.record as { id:number; student_id:number; label:'genuine'|'forged'; s3_url:string; s3_key:string };
+    return data.record as { id:number; student_id:number; label:'genuine'; s3_url:string; s3_key:string };
   }
 
   async listSignatures(studentId: number) {
-    const res = await fetch(`${this.baseUrl}/api/uploads/list?student_id=${studentId}`);
+    const res = await fetch(this.getUrl(`/api/signatures/list?student_id=${studentId}`));
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'List failed');
-    return data.signatures as Array<{ id:number; student_id:number; label:'genuine'|'forged'; s3_url:string; s3_key:string }>;
+    return data.signatures as Array<{ id:number; student_id:number; label:'genuine'; s3_url:string; s3_key:string }>;
   }
 
-  async presignSignature(studentId: number, label: 'genuine'|'forged', file: File) {
+  async deleteSignature(signatureId: number, s3Key?: string) {
     const form = new FormData();
-    form.append('student_id', String(studentId));
-    form.append('label', label);
-    form.append('filename', file.name);
-    form.append('content_type', file.type || 'application/octet-stream');
-    const ps = await fetch(`${this.baseUrl}/api/uploads/presign`, { method: 'POST', body: form });
-    const pd = await ps.json();
-    if (!ps.ok) throw new Error(pd.detail || 'Presign failed');
-    const uploadForm = new FormData();
-    Object.entries(pd.fields).forEach(([k, v]) => uploadForm.append(k, String(v)));
-    uploadForm.append('file', file);
-    const up = await fetch(pd.url, { method: 'POST', body: uploadForm });
-    if (!up.ok) throw new Error('S3 direct upload failed');
-    return { key: pd.key as string, s3_url: pd.public_url as string };
-  }
-
-  async deleteSignature(recordId: number, s3Key?: string) {
-    const url = new URL(`${this.baseUrl}/api/uploads/signature/${recordId}`);
-    if (s3Key) url.searchParams.set('s3_key', s3Key);
-    const res = await fetch(url.toString(), { method: 'DELETE' });
-    const data = await res.json().catch(() => ({}));
+    form.append('signature_id', String(signatureId));
+    if (s3Key) form.append('s3_key', s3Key);
+    const res = await fetch(this.getUrl('/api/signatures/delete'), { method: 'POST', body: form });
+    const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Delete failed');
-    return true;
+    return data;
   }
 
-  async listStudentsWithImages(summary: boolean = true) {
-    const url = new URL(`${this.baseUrl}/api/uploads/students-with-images`);
-    if (summary) url.searchParams.set('summary', 'true');
-    const res = await fetch(url.toString());
+  // Training operations
+  async listStudentsWithImages() {
+    const res = await fetch(this.getUrl('/api/training/list_students'));
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'List failed');
-    // Support summarized counts: { student_id, genuine_count, forged_count }
-    return data.items as Array<{ student_id:number; genuine_count?: number; forged_count?: number; signatures?: Array<{ label:'genuine'|'forged'; s3_url:string }> }>;
+    return data.items as Array<{ student_id:number; genuine_count?: number; signatures?: Array<{ label:'genuine'; s3_url:string }> }>;
   }
 
-  /**
-   * Train AI model for a specific student
-   */
-  async trainStudent(studentId: number): Promise<AITrainingResponse> {
-    try {
-      // Keep method for backward compatibility; recommend using trainStudentWithFiles
-      const response = await fetch(`${this.baseUrl}/api/training/start`, {
-        method: 'POST'
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Training request failed');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('AI training error:', error);
-      return {
-        success: false,
-        message: 'Failed to start training',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  /**
-   * Train with actual files against FastAPI endpoint
-   */
-  async trainStudentWithFiles(
-    studentSchoolId: string,
-    genuineFiles: File[],
-    forgedFiles: File[]
-  ): Promise<any> {
-    try {
-      const formData = new FormData();
-      formData.append('student_id', String(studentSchoolId));
-      for (const f of genuineFiles) formData.append('genuine_files', f);
-      for (const f of forgedFiles) formData.append('forged_files', f);
-
-      const response = await fetch(`${this.baseUrl}/api/training/start`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Training request failed');
-      }
-      // Normalize to include success flag for UI consistency
-      return { success: true, ...data };
-    } catch (error) {
-      console.error('AI training (files) error:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  /**
-   * Verify signature image
-   */
-  async verifySignature(
-    imageFile: File,
-    sessionId?: number
-  ): Promise<AIVerificationResponse> {
-    try {
-      const formData = new FormData();
-      // Backend expects 'test_file' for verification/identify endpoints
-      formData.append('test_file', imageFile);
-      
-      if (sessionId) {
-        formData.append('session_id', sessionId.toString());
-      }
-
-      const response = await fetch(`${this.baseUrl}/api/verification/identify`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Verification request failed');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('AI verification error:', error);
-      return {
-        success: false,
-        match: false,
-        predicted_student_id: null,
-        score: 0,
-        decision: 'error',
-        message: 'Failed to verify signature',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  /**
-   * Get a browser-displayable preview PNG for any uploaded image (e.g., TIFF)
-   */
-  async getPreviewURL(file: File): Promise<string> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const resp = await fetch(`${this.baseUrl}/api/utils/preview`, { method: 'POST', body: formData });
-    if (!resp.ok) {
-      throw new Error('Failed to generate preview');
-    }
-    const blob = await resp.blob();
-    return URL.createObjectURL(blob);
-  }
-
-  /**
-   * Verify using model and references (FastAPI shape)
-   */
-  async verifyWithModel(
-    modelId: string,
-    referenceFiles: File[],
-    testFile: File
-  ): Promise<AIVerificationResponse> {
-    try {
-      const formData = new FormData();
-      formData.append('model_id', modelId);
-      for (const f of referenceFiles) formData.append('reference_files', f);
-      formData.append('test_file', testFile);
-
-      const response = await fetch(`${this.baseUrl}/api/verification/verify`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Verification failed');
-      }
-      return data;
-    } catch (error) {
-      console.error('AI verification (model) error:', error);
-      return {
-        success: false,
-        match: false,
-        predicted_student_id: null,
-        score: 0,
-        decision: 'error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  /**
-   * Verify signature from data URL (base64 encoded image)
-   */
-  async verifySignatureFromDataURL(
-    dataURL: string,
-    sessionId?: number
-  ): Promise<AIVerificationResponse> {
-    try {
-      // Convert data URL to blob
-      const response = await fetch(dataURL);
-      const blob = await response.blob();
-      
-      // Create file from blob
-      const file = new File([blob], 'signature.png', { type: 'image/png' });
-      
-      return this.verifySignature(file, sessionId);
-    } catch (error) {
-      console.error('Error converting data URL to file:', error);
-      return {
-        success: false,
-        match: false,
-        predicted_student_id: null,
-        score: 0,
-        decision: 'error',
-        message: 'Failed to process signature image',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  /**
-   * Start async training job
-   */
-  async startAsyncTraining(
-    studentId: string,
-    genuineFiles: File[],
-    forgedFiles: File[],
-    trainingMode?: 'individual' | 'global' | 'hybrid'
-  ): Promise<AsyncTrainingResponse> {
-    try {
-      const formData = new FormData();
-      formData.append('student_id', studentId);
-      for (const file of genuineFiles) {
-        formData.append('genuine_files', file);
-      }
-      for (const file of forgedFiles) {
-        formData.append('forged_files', file);
-      }
-      if (trainingMode) {
-        formData.append('training_mode', trainingMode);
-      }
-
-      const response = await fetch(`${this.baseUrl}/api/training/start-async`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        console.error('Training API error:', {
-          status: response.status,
-          statusText: response.statusText,
-          data: data
-        });
-        throw new Error(data.detail || data.message || `Training failed with status ${response.status}`);
-      }
-      return data;
-    } catch (error) {
-      console.error('AI async training error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get training job status
-   */
-  async getJobStatus(jobId: string): Promise<TrainingJob> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/progress/job/${jobId}`);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Failed to get job status');
-      }
-      return data;
-    } catch (error) {
-      console.error('Get job status error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Subscribe to training job progress via Server-Sent Events
-   */
-  subscribeToJobProgress(
-    jobId: string,
-    onUpdate: (job: TrainingJob) => void,
-    onError?: (error: Error) => void
-  ): EventSource {
-    const eventSource = new EventSource(`${this.baseUrl}/api/progress/stream/${jobId}`);
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const job: TrainingJob = JSON.parse(event.data);
-        onUpdate(job);
-      } catch (error) {
-        console.error('Error parsing SSE data:', error);
-        if (onError) {
-          onError(error instanceof Error ? error : new Error('Parse error'));
-        }
-      }
-    };
-    
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
-      if (onError) {
-        onError(new Error('Connection error'));
-      }
-    };
-    
-    return eventSource;
-  }
-
-  /**
-   * Start GPU training on AWS
-   */
+  // GPU-accelerated training with S3 storage
   async startGPUTraining(
     studentId: string,
     genuineFiles: File[],
-    forgedFiles: File[],
     useGPU: boolean = true,
     saveToS3: boolean = true
-  ): Promise<AsyncTrainingResponse> {
+  ): Promise<any> {
     try {
       const formData = new FormData();
       formData.append('student_id', studentId);
-      formData.append('use_gpu', useGPU.toString());
-      // Backend expects `use_s3_upload`; keep legacy `save_to_s3` for backward compatibility
-      formData.append('use_s3_upload', saveToS3.toString());
-      formData.append('save_to_s3', saveToS3.toString());
+      formData.append('use_gpu', String(useGPU));
+      formData.append('save_to_s3', String(saveToS3));
       
       for (const file of genuineFiles) {
         formData.append('genuine_files', file);
       }
-      for (const file of forgedFiles) {
-        formData.append('forged_files', file);
-      }
-      // Force hybrid mode
-      formData.append('training_mode', 'hybrid');
+      // Force global mode
+      formData.append('training_mode', 'global');
 
-      const response = await fetch(`${this.baseUrl}/api/training/start-gpu-training`, {
+      const response = await fetch(`${this.baseUrl}/api/training/gpu/start`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'GPU training failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `GPU training failed: ${response.status}`);
       }
 
-      const data = await response.json();
-      return {
-        success: data.success,
-        job_id: data.job_id,
-        message: data.message,
-        stream_url: data.stream_url,
-        training_type: data.training_type || 'gpu'
-      };
+      return await response.json();
     } catch (error) {
       console.error('GPU training error:', error);
       throw error;
     }
   }
 
-  /**
-   * Check AI service health
-   */
-  async healthCheck(): Promise<{ status: string; healthy: boolean }> {
+  // Async training operations
+  async startAsyncTraining(
+    studentId: string,
+    genuineFiles: File[],
+    trainingMode: 'global' = 'global'
+  ): Promise<{
+    task_id: string;
+    message: string;
+    student_id: string;
+    training_mode: string;
+  }> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`);
-      const data = await response.json();
-      
-      return {
-        status: data.status || 'unknown',
-        healthy: response.ok && data.status === 'healthy',
-      };
+      const formData = new FormData();
+      formData.append('student_id', studentId);
+      for (const file of genuineFiles) {
+        formData.append('genuine_files', file);
+      }
+      if (trainingMode) {
+        formData.append('training_mode', trainingMode);
+      }
+
+      const response = await fetch(`${this.baseUrl}/api/training/async/start`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Async training failed: ${response.status}`);
+      }
+
+      return await response.json();
     } catch (error) {
-      console.error('AI service health check failed:', error);
-      return {
-        status: 'error',
-        healthy: false,
-      };
+      console.error('Async training error:', error);
+      throw error;
+    }
+  }
+
+  // Verification operations - Owner identification only
+  async verifySignature(imageFile: File, studentId?: string): Promise<{
+    success: boolean;
+    student_id?: string;
+    student_name?: string;
+    confidence?: number;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const formData = new FormData();
+      formData.append('signature_image', imageFile);
+      if (studentId) {
+        formData.append('student_id', studentId);
+      }
+
+      const response = await fetch(`${this.baseUrl}/api/verification/verify`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Verification failed: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Verification error:', error);
+      throw error;
     }
   }
 }
 
-// Export a singleton instance
 export const aiService = new AIService();
-
-// Export configuration
-export const AI_CONFIG = {
-  BASE_URL: AI_BASE_URL,
-  ENDPOINTS: {
-    TRAIN: '/train',
-    VERIFY: '/verify',
-    HEALTH: '/health',
-  },
-};
+export default aiService;
