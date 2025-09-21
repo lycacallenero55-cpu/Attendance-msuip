@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GPU Training Script - TensorFlow 2.13 Compatible
+GPU Training Script - TensorFlow 2.18 Compatible
 Optimized for AWS Deep Learning AMI with GPU support
 """
 

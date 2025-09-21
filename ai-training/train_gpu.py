@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # GPU Configuration
 def configure_gpu():
     """Configure GPU settings for optimal performance"""
-    gpus = tf.config.experimental.list_physical_devices('GPU')
+    gpus = tf.config.list_physical_devices('GPU')
     if gpus:
         try:
             for gpu in gpus:

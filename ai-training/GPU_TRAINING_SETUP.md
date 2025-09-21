@@ -30,7 +30,7 @@ Your web application now has **GPU training support**! When users click "Train M
 ## ✅ What's Fixed
 
 - ✅ **Updated AMI ID**: Now uses `ami-00f0918871e41f60d` (Deep Learning OSS Nvidia Driver AMI GPU TensorFlow 2.18 Ubuntu 22.04)
-- ✅ **TensorFlow 2.13 Compatible**: Updated all APIs for compatibility
+- ✅ **TensorFlow 2.18 Compatible**: Updated all APIs for compatibility
 - ✅ **GPU Detection**: Fixed `tf.config.list_physical_devices('GPU')`
 - ✅ **Training Script**: New `train_gpu_tf213.py` with proper error handling
 - ✅ **Real-time Progress**: Web interface shows training progress
@@ -127,7 +127,7 @@ sudo apt update
 sudo apt install -y libcudnn8
 
 # Install TensorFlow with GPU support
-pip3 install tensorflow[and-cuda]==2.13.0
+pip3 install tensorflow[and-cuda]==2.18.0
 pip3 install boto3 numpy pillow opencv-python scikit-learn requests
 
 # Verify GPU setup

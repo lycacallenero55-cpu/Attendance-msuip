@@ -41,7 +41,7 @@ print(f"Job ID: {job_id}")
 print(f"Student ID: {student_id}")
 
 # GPU Configuration with memory growth
-gpus = tf.config.experimental.list_physical_devices('GPU')
+gpus = tf.config.list_physical_devices('GPU')
 if gpus:
     try:
         for gpu in gpus:

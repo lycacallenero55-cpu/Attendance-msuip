@@ -2,7 +2,7 @@
 # Optimized for AWS GPU instances with CUDA support
 
 # Core ML/DL with GPU support
-tensorflow[and-cuda]==2.13.0
+tensorflow[and-cuda]==2.18.0
 # Alternative: tensorflow-gpu==2.13.0  # Use if tensorflow[and-cuda] not available
 
 # Core dependencies
