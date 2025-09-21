@@ -46,7 +46,7 @@ def configure_tensorflow_for_cpu():
         physical_devices = tf.config.list_physical_devices('GPU')
         if physical_devices:
             for device in physical_devices:
-                tf.config.experimental.set_memory_growth(device, True)
+                tf.config.set_memory_growth(device, True)
         
         logger.info("TensorFlow CPU optimization configured successfully")
         
