@@ -1,6 +1,6 @@
-# Local Development Requirements (CPU-only)
+# Local Development Requirements (CPU-only) - SAFE VERSION
 # For Windows PC with Python 3.10.11
-# No CUDA dependencies - CPU training only
+# Conservative versions that are guaranteed to work together
 
 # Web Framework
 fastapi==0.92.0
@@ -12,13 +12,13 @@ python-multipart==0.0.9
 typing-extensions==4.5.0
 
 # ML / DL - TensorFlow CPU-only (no CUDA)
-# This version works perfectly with Python 3.10.11
-tensorflow==2.18.0
+# Using TensorFlow 2.13.1 which is more stable with Python 3.10.11
+tensorflow==2.13.1
 
-# Core ML dependencies (compatible with TensorFlow 2.18)
-numpy>=1.26.0,<2.1.0
-scikit-learn>=1.3.0
-scipy>=1.10.0
+# Core ML dependencies (compatible with TensorFlow 2.13.1)
+numpy==1.24.3
+scikit-learn==1.3.2
+scipy==1.10.1
 pillow==10.2.0
 opencv-python==4.9.0.80
 
@@ -28,7 +28,6 @@ botocore==1.34.34
 
 # Supabase + HTTP
 supabase>=2.6.0
-# httpx >=0.26 so Client accepts `proxy` kwarg used by gotrue/supabase
 httpx>=0.27,<0.28
 requests==2.31.0
 python-dotenv==1.0.1
