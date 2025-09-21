@@ -1227,10 +1227,8 @@ async def run_global_gpu_training(job, student_ids, genuine_data, forged_data, u
             bucket = per_student.get(sid, {"genuine_images": [], "forged_images": []})
             # Use student name for consistent mapping
             student_name = f"{s.get('firstname', '')} {s.get('surname', '')}".strip() or f"Student_{sid}"
-            training_data[student_name] = {
-                "genuine_images": bucket["genuine_images"],
-                "forged_images": bucket["forged_images"],
-            }
+            # GlobalSignatureClassifier expects {student_name: [images]} format
+            training_data[student_name] = bucket["genuine_images"]  # Only genuine images for global classifier
 
         if job:
             job_queue.update_job_progress(job.job_id, 25.0, "Starting global GPU training...")
@@ -1339,11 +1337,10 @@ async def run_global_async_training(job, student_ids, genuine_data, forged_data,
         for s in students:
             sid = int(s["id"])  # type: ignore[index]
             bucket = per_student.get(sid, {"genuine_images": [], "forged_images": []})
-            # Use student ID as key (not name) to match GlobalSignatureVerificationModel expectations
-            training_data[sid] = {
-                'genuine_images': bucket['genuine_images'],
-                'forged_images': bucket['forged_images']
-            }
+            # Use student name for consistent mapping with GlobalSignatureClassifier
+            student_name = f"{s.get('firstname', '')} {s.get('surname', '')}".strip() or f"Student_{sid}"
+            # GlobalSignatureClassifier expects {student_name: [images]} format
+            training_data[student_name] = bucket['genuine_images']  # Only genuine images for global classifier
 
         if job:
             job_queue.update_job_progress(job.job_id, 80.0, "Training global model...")
