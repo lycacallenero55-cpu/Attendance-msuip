@@ -1,5 +1,6 @@
-# Unified Requirements - TensorFlow 2.18 Compatible
-# Works for both CPU (Windows Ryzen 5 3400G) and GPU (AWS instances)
+# GPU Instance Requirements (with CUDA)
+# For AWS Deep Learning AMI with Python 3.12.6
+# Includes CUDA dependencies for GPU acceleration
 
 # Web Framework
 fastapi==0.92.0
@@ -10,10 +11,9 @@ python-multipart==0.0.9
 # Core typing pin to satisfy TensorFlow
 typing-extensions==4.5.0
 
-# ML / DL - TensorFlow 2.18 (CPU + GPU compatible)
-# Note: Use requirements-local.txt for Windows PC (CPU-only)
-# Use requirements-gpu.txt for AWS GPU instances (with CUDA)
-tensorflow==2.18.0
+# ML / DL - TensorFlow with CUDA support
+# This version includes CUDA libraries for GPU acceleration
+tensorflow[and-cuda]==2.18.0
 
 # Core ML dependencies (compatible with TensorFlow 2.18)
 numpy==1.26.4
@@ -43,5 +43,5 @@ pydantic==1.10.13
 aiohttp>=3.8,<4
 
 # Optional: For better performance monitoring
-# psutil  # For system monitoring
-# nvidia-ml-py3  # For GPU monitoring (only on GPU instances)
+psutil  # For system monitoring
+nvidia-ml-py3  # For GPU monitoring (only on GPU instances)

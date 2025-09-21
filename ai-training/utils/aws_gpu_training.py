@@ -261,7 +261,7 @@ fi
 
 # Install Python packages
 pip3 install --upgrade pip
-        pip3 install tensorflow[and-cuda]==2.18.0 boto3 numpy pillow opencv-python scikit-learn requests
+        pip3 install -r requirements-gpu.txt
 
 # Verify TensorFlow installation
 python3 -c "import tensorflow as tf; print('TensorFlow version:', tf.__version__); print('GPUs:', tf.config.list_physical_devices('GPU'))"
