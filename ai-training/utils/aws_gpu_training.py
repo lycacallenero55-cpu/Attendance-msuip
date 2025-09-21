@@ -526,7 +526,7 @@ echo "Instance setup completed at $(date)"
             import zipfile
             import io as _io
             from pathlib import Path as _Path
-            tmpl_path = _Path(__file__).parent.parent / 'scripts' / 'train_gpu_tf213.py'
+            tmpl_path = _Path(__file__).parent.parent / 'scripts' / 'train_gpu_tf218.py'
             with open(tmpl_path, 'r') as _f:
                 training_script = _f.read()
             buf = _io.BytesIO()
