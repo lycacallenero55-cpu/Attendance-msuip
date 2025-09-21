@@ -188,6 +188,239 @@ export type Database = {
           },
         ]
       }
+      global_trained_models: {
+        Row: {
+          accuracy: number | null
+          centroids_path: string | null
+          created_at: string | null
+          embedding_spec_path: string | null
+          far: number | null
+          frr: number | null
+          genuine_count: number
+          id: number
+          is_active: boolean | null
+          mappings_path: string | null
+          model_path: string
+          model_uuid: string
+          parent_model_id: number | null
+          performance_metrics: Json | null
+          s3_key: string | null
+          sample_count: number
+          status: string
+          student_count: number
+          training_date: string | null
+          training_metrics: Json | null
+          updated_at: string | null
+          version: number | null
+          version_notes: string | null
+        }
+        Insert: {
+          accuracy?: number | null
+          centroids_path?: string | null
+          created_at?: string | null
+          embedding_spec_path?: string | null
+          far?: number | null
+          frr?: number | null
+          genuine_count?: number
+          id?: number
+          is_active?: boolean | null
+          mappings_path?: string | null
+          model_path: string
+          model_uuid: string
+          parent_model_id?: number | null
+          performance_metrics?: Json | null
+          s3_key?: string | null
+          sample_count?: number
+          status?: string
+          student_count?: number
+          training_date?: string | null
+          training_metrics?: Json | null
+          updated_at?: string | null
+          version?: number | null
+          version_notes?: string | null
+        }
+        Update: {
+          accuracy?: number | null
+          centroids_path?: string | null
+          created_at?: string | null
+          embedding_spec_path?: string | null
+          far?: number | null
+          frr?: number | null
+          genuine_count?: number
+          id?: number
+          is_active?: boolean | null
+          mappings_path?: string | null
+          model_path?: string
+          model_uuid?: string
+          parent_model_id?: number | null
+          performance_metrics?: Json | null
+          s3_key?: string | null
+          sample_count?: number
+          status?: string
+          student_count?: number
+          training_date?: string | null
+          training_metrics?: Json | null
+          updated_at?: string | null
+          version?: number | null
+          version_notes?: string | null
+        }
+        Relationships: []
+      }
+      model_ab_tests: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          id: number
+          is_active: boolean | null
+          model_a_id: number
+          model_b_id: number
+          results: Json | null
+          start_date: string | null
+          student_id: number
+          test_name: string
+          traffic_split: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: number
+          is_active?: boolean | null
+          model_a_id: number
+          model_b_id: number
+          results?: Json | null
+          start_date?: string | null
+          student_id: number
+          test_name: string
+          traffic_split?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: number
+          is_active?: boolean | null
+          model_a_id?: number
+          model_b_id?: number
+          results?: Json | null
+          start_date?: string | null
+          student_id?: number
+          test_name?: string
+          traffic_split?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_ab_tests_model_a_id_fkey"
+            columns: ["model_a_id"]
+            isOneToOne: false
+            referencedRelation: "trained_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_ab_tests_model_b_id_fkey"
+            columns: ["model_b_id"]
+            isOneToOne: false
+            referencedRelation: "trained_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_ab_tests_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      model_audit_log: {
+        Row: {
+          action: string
+          id: number
+          model_id: number
+          new_values: Json | null
+          notes: string | null
+          old_values: Json | null
+          performed_at: string | null
+          performed_by: string | null
+        }
+        Insert: {
+          action: string
+          id?: number
+          model_id: number
+          new_values?: Json | null
+          notes?: string | null
+          old_values?: Json | null
+          performed_at?: string | null
+          performed_by?: string | null
+        }
+        Update: {
+          action?: string
+          id?: number
+          model_id?: number
+          new_values?: Json | null
+          notes?: string | null
+          old_values?: Json | null
+          performed_at?: string | null
+          performed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_audit_log_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "trained_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      model_versions: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: number
+          is_active: boolean | null
+          model_artifacts: Json | null
+          model_id: number
+          performance_metrics: Json | null
+          version: number
+          version_notes: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: number
+          is_active?: boolean | null
+          model_artifacts?: Json | null
+          model_id: number
+          performance_metrics?: Json | null
+          version: number
+          version_notes?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: number
+          is_active?: boolean | null
+          model_artifacts?: Json | null
+          model_id?: number
+          performance_metrics?: Json | null
+          version?: number
+          version_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_versions_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "trained_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sessions: {
         Row: {
           capacity: string | null
@@ -239,16 +472,49 @@ export type Database = {
         }
         Relationships: []
       }
+      student_signatures: {
+        Row: {
+          content_hash: string | null
+          created_at: string | null
+          id: number
+          label: string
+          s3_key: string
+          s3_url: string
+          student_id: number
+        }
+        Insert: {
+          content_hash?: string | null
+          created_at?: string | null
+          id?: never
+          label: string
+          s3_key: string
+          s3_url: string
+          student_id: number
+        }
+        Update: {
+          content_hash?: string | null
+          created_at?: string | null
+          id?: never
+          label?: string
+          s3_key?: string
+          s3_url?: string
+          student_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_signatures_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
-          address: string | null
-          birthday: string | null
-          contact_no: string | null
           created_at: string | null
-          email: string | null
           firstname: string
           id: number
-          middle_initial: string | null
           middlename: string | null
           program: string
           section: string
@@ -259,14 +525,9 @@ export type Database = {
           year: string
         }
         Insert: {
-          address?: string | null
-          birthday?: string | null
-          contact_no?: string | null
           created_at?: string | null
-          email?: string | null
           firstname: string
           id?: number
-          middle_initial?: string | null
           middlename?: string | null
           program: string
           section: string
@@ -277,14 +538,9 @@ export type Database = {
           year: string
         }
         Update: {
-          address?: string | null
-          birthday?: string | null
-          contact_no?: string | null
           created_at?: string | null
-          email?: string | null
           firstname?: string
           id?: number
-          middle_initial?: string | null
           middlename?: string | null
           program?: string
           section?: string
@@ -301,51 +557,91 @@ export type Database = {
           accuracy: number | null
           created_at: string | null
           embedding_model_path: string | null
-          forged_count: number
+          embedding_s3_key: string | null
+          far: number | null
+          frr: number | null
           genuine_count: number
+          global_model_id: number | null
           id: number
+          is_active: boolean | null
           model_path: string
+          model_uuid: string | null
+          parent_model_id: number | null
+          performance_metrics: Json | null
           prototype_centroid: Json | null
           prototype_threshold: number | null
+          s3_key: string | null
           sample_count: number
           status: string
           student_id: number
           training_date: string | null
+          training_metrics: Json | null
           updated_at: string | null
+          version: number | null
+          version_notes: string | null
         }
         Insert: {
           accuracy?: number | null
           created_at?: string | null
           embedding_model_path?: string | null
-          forged_count?: number
+          embedding_s3_key?: string | null
+          far?: number | null
+          frr?: number | null
           genuine_count?: number
+          global_model_id?: number | null
           id?: number
+          is_active?: boolean | null
           model_path: string
+          model_uuid?: string | null
+          parent_model_id?: number | null
+          performance_metrics?: Json | null
           prototype_centroid?: Json | null
           prototype_threshold?: number | null
+          s3_key?: string | null
           sample_count?: number
           status?: string
           student_id: number
           training_date?: string | null
+          training_metrics?: Json | null
           updated_at?: string | null
+          version?: number | null
+          version_notes?: string | null
         }
         Update: {
           accuracy?: number | null
           created_at?: string | null
           embedding_model_path?: string | null
-          forged_count?: number
+          embedding_s3_key?: string | null
+          far?: number | null
+          frr?: number | null
           genuine_count?: number
+          global_model_id?: number | null
           id?: number
+          is_active?: boolean | null
           model_path?: string
+          model_uuid?: string | null
+          parent_model_id?: number | null
+          performance_metrics?: Json | null
           prototype_centroid?: Json | null
           prototype_threshold?: number | null
+          s3_key?: string | null
           sample_count?: number
           status?: string
           student_id?: number
           training_date?: string | null
+          training_metrics?: Json | null
           updated_at?: string | null
+          version?: number | null
+          version_notes?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "trained_models_global_model_id_fkey"
+            columns: ["global_model_id"]
+            isOneToOne: false
+            referencedRelation: "global_trained_models"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "trained_models_student_id_fkey"
             columns: ["student_id"]
@@ -399,6 +695,61 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      verification_results: {
+        Row: {
+          ab_test_id: number | null
+          created_at: string | null
+          id: number
+          model_id: number
+          processing_time_ms: number | null
+          student_id: number
+          test_signature_path: string | null
+          verification_result: Json | null
+        }
+        Insert: {
+          ab_test_id?: number | null
+          created_at?: string | null
+          id?: number
+          model_id: number
+          processing_time_ms?: number | null
+          student_id: number
+          test_signature_path?: string | null
+          verification_result?: Json | null
+        }
+        Update: {
+          ab_test_id?: number | null
+          created_at?: string | null
+          id?: number
+          model_id?: number
+          processing_time_ms?: number | null
+          student_id?: number
+          test_signature_path?: string | null
+          verification_result?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_results_ab_test_id_fkey"
+            columns: ["ab_test_id"]
+            isOneToOne: false
+            referencedRelation: "model_ab_tests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_results_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "trained_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_results_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -484,6 +835,10 @@ export type Database = {
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: unknown
+      }
+      list_students_with_images: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       reject_user: {
         Args: { rejector_id: string; user_id: string }
