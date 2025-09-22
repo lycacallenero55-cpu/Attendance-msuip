@@ -317,7 +317,7 @@ def train_on_gpu(training_data_key, job_id, student_id):
         print("Uploaded training results to S3")
         
         print("\n=== GLOBAL SIGNATURE CLASSIFIER TRAINING COMPLETED ===")
-        print("Owner Identification Only - No Forgery Detection")
+        print("Owner Identification System")
         print(f"Job ID: {job_id}")
         print(f"Model Type: Global Classifier")
         print(f"Final accuracy: {final_accuracy:.4f}")
@@ -348,7 +348,7 @@ if __name__ == "__main__":
     
     print("🎓 Global Signature Classifier GPU Training")
     print("=" * 50)
-    print("Owner Identification Only - No Forgery Detection")
+    print("Owner Identification System")
     print(f"Training data key: {training_data_key}")
     print(f"Job ID: {job_id}")
     print(f"Student ID: {student_id}")

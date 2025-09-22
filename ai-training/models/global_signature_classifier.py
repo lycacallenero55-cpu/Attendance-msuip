@@ -22,7 +22,7 @@ class GlobalSignatureClassifier:
     - One global model for all students
     - Few-shot learning capability
     - Incremental learning (add new students)
-    - Owner identification only (no forgery detection)
+    - Focused on owner identification
     """
     
     def __init__(self, 

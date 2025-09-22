@@ -249,6 +249,9 @@ if ! command -v aws &> /dev/null; then
     unzip awscliv2.zip
     ./aws/install
     rm -rf aws awscliv2.zip
+    # Source AWS CLI in current session
+    source ~/.bashrc
+    export PATH=$PATH:/usr/local/bin
 fi
 
 # Install Docker if not present
@@ -259,12 +262,36 @@ if ! command -v docker &> /dev/null; then
     rm get-docker.sh
 fi
 
+# Start Docker service
+systemctl start docker
+systemctl enable docker
+
+# Allow current user to use Docker without logout
+set +e
+usermod -aG docker ubuntu
+set -e
+# Set up Docker environment for current session
+current_user=$(whoami)
+if [ "$current_user" != "root" ]; then
+    # Fix Docker socket permissions
+    chmod 666 /var/run/docker.sock 2>/dev/null || true
+fi
+
 # Install Python packages
 pip3 install --upgrade pip
         pip3 install -r requirements-gpu.txt
 
 # Verify TensorFlow installation
 python3 -c "import tensorflow as tf; print('TensorFlow version:', tf.__version__); print('GPUs:', tf.config.list_physical_devices('GPU'))"
+
+# Verify Docker installation
+docker --version
+if [ $? -eq 0 ]; then
+    echo "Docker is installed and accessible"
+    docker run --rm hello-world
+else
+    echo "Warning: Docker is not accessible"
+fi
 
 # Create training directory
 mkdir -p {training_path}
@@ -441,10 +468,8 @@ echo "Instance setup completed at $(date)"
             
             # Handle different data structures
             if isinstance(signatures, dict):
-                # Accept both new and legacy keys
                 key_aliases = {
                     'genuine': ['genuine', 'genuine_images'],
-                    'forged': ['forged', 'forged_images'],
                 }
                 for norm_key, aliases in key_aliases.items():
                     found_key = None
@@ -500,8 +525,7 @@ echo "Instance setup completed at $(date)"
                     else:
                         wrapped.append({"raw": str(type(img))})
                 serializable_data[student_name] = {
-                    'genuine': wrapped,
-                    'forged': []
+                    'genuine': wrapped
                 }
         
         # Upload to S3
@@ -531,7 +555,7 @@ echo "Instance setup completed at $(date)"
                 training_script = _f.read()
             buf = _io.BytesIO()
             with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-                zf.writestr('train_gpu.py', training_script)
+                zf.writestr('train_gpu_tf218.py', training_script)
             zip_bytes = buf.getvalue()
             encoded = base64.b64encode(zip_bytes)
             script_key = f'scripts/{job_id}/train_gpu_py_zip.b64'
@@ -543,11 +567,11 @@ echo "Instance setup completed at $(date)"
                 f'cd {self.training_script_path}',
                 f'aws s3 cp s3://{self.s3_bucket}/{script_key} train_gpu_py_zip.b64',
                 # Decode and unzip using Python to avoid missing unzip
-                'python3 - <<\'PY\'\nimport base64,sys,zipfile,io\nenc=open("train_gpu_py_zip.b64","rb").read()\nraw=base64.b64decode(enc)\nzipfile.ZipFile(io.BytesIO(raw)).extractall(".")\nprint("Decoded and extracted train_gpu.py")\nPY',
-                'chmod +x train_gpu.py',
+                'python3 - <<\'PY\'\nimport base64,sys,zipfile,io\nenc=open("train_gpu_py_zip.b64","rb").read()\nraw=base64.b64decode(enc)\nzipfile.ZipFile(io.BytesIO(raw)).extractall(".")\nprint("Decoded and extracted train_gpu_tf218.py")\nPY',
+                'chmod +x train_gpu_tf218.py',
                 'rm -f train_gpu_py_zip.b64',
                 # Preflight syntax check with context dump on failure
-                'python3 -m py_compile train_gpu.py || (echo "Syntax check failed"; nl -ba train_gpu.py | sed -n "220,260p"; exit 1)',
+                'python3 -m py_compile train_gpu_tf218.py || (echo "Syntax check failed"; nl -ba train_gpu_tf218.py | sed -n "220,260p"; exit 1)',
                 f'echo "Setup complete for job {job_id}"'
             ]
             
@@ -577,7 +601,7 @@ import subprocess
 # This is a wrapper script that calls the actual training script
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: train_gpu.py <training_data_key> <job_id> <student_id>")
+        print("Usage: train_gpu_tf218.py <training_data_key> <job_id> <student_id>")
         sys.exit(1)
     
     training_data_key = sys.argv[1]
@@ -592,7 +616,7 @@ if __name__ == "__main__":
     # Call the actual training script
     try:
         result = subprocess.run([
-            'python3', 'train_gpu.py', 
+            'python3', 'train_gpu_tf218.py', 
             training_data_key, job_id, student_id
         ], check=True, capture_output=True, text=True)
         
@@ -617,7 +641,7 @@ if __name__ == "__main__":
             # Run training command
             training_command = [
                 f'cd {self.training_script_path}',
-                f'python3 train_gpu.py {training_data_key} {job_id} {student_id}'
+                f'python3 train_gpu_tf218.py {training_data_key} {job_id} {student_id}'
             ]
             
             response = self.ssm_client.send_command(

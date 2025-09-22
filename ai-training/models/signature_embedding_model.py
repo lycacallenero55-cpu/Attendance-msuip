@@ -1,7 +1,7 @@
 """
 Production-Ready Signature Verification AI System
 Real deep learning with proper feature extraction and embedding networks
-Focus: Owner identification only (forgery detection disabled)
+Focus: Owner identification
 """
 
 import tensorflow as tf
@@ -23,7 +23,7 @@ class SignatureEmbeddingModel:
     - Deep embedding networks for generalization
     - Multi-scale feature extraction
     - Attention mechanisms for stroke patterns
-    - Owner identification focus (forgery detection disabled)
+    - Owner identification focus
     """
     
     def __init__(self, 
@@ -40,7 +40,6 @@ class SignatureEmbeddingModel:
         # Model components
         self.embedding_model = None
         self.classification_head = None
-        # Note: authenticity_head removed - forgery detection is disabled
         self.siamese_model = None
         
         # ID-first mappings (Teachable Machine style)
@@ -205,7 +204,6 @@ class SignatureEmbeddingModel:
         logger.info(f"Created classification head with {self.classification_head.count_params():,} parameters")
         return self.classification_head
     
-    # Note: create_authenticity_head method removed - forgery detection is disabled
     
     def create_siamese_network(self) -> keras.Model:
         """
@@ -292,7 +290,7 @@ class SignatureEmbeddingModel:
     def prepare_training_data(self, training_data: Dict) -> Tuple[np.ndarray, np.ndarray]:
         """
         Prepare training data with proper preprocessing and augmentation
-        Focus: Owner identification only (forgery detection disabled)
+        Focus: Owner identification
         Uses ID-first approach for Teachable Machine compatibility
         """
         logger.info("Preparing training data with ID-first approach...")
@@ -366,8 +364,7 @@ class SignatureEmbeddingModel:
                     logger.warning(f"Preprocessing failed for student {student_id}: {e}")
                     continue
             
-            # Skip forged signatures - not used for owner identification training
-            # (Forgery detection is disabled system-wide - focus on owner identification only)
+            # Only process genuine signatures for owner identification
             
             class_index += 1  # Increment class index for next student
         
@@ -606,7 +603,7 @@ class SignatureEmbeddingModel:
     def train_models(self, training_data: Dict, epochs: int = 100) -> Dict:
         """
         Train models with advanced training strategies
-        Focus: Owner identification only (forgery detection disabled)
+        Focus: Owner identification
         """
         logger.info("Starting comprehensive model training...")
         
@@ -730,7 +727,6 @@ class SignatureEmbeddingModel:
         
         for student_name, signatures in training_data.items():
             genuine_images = signatures['genuine']
-            forged_images = signatures['forged']
             
             # Positive pairs (genuine-genuine) - generate more pairs for better training
             for i in range(len(genuine_images)):
@@ -740,8 +736,7 @@ class SignatureEmbeddingModel:
                     pairs.append([img1, img2])
                     labels.append(1)  # Similar
             
-            # Skip negative pairs with forged signatures - not used for owner identification
-            # (Forgery detection is disabled - focus on owner identification only)
+            # Only process genuine signatures for owner identification
         
         if len(pairs) == 0:
             return np.array([]), np.array([])
@@ -755,7 +750,7 @@ class SignatureEmbeddingModel:
         """
         logger.info("Performing comprehensive signature verification...")
         
-        # Check available heads; forgery detection is disabled system-wide
+        # Check available heads; system focuses on owner identification
         if not self.embedding_model:
             raise ValueError("Embedding model not loaded. Please load a trained model first.")
         has_classification = self.classification_head is not None
@@ -772,7 +767,7 @@ class SignatureEmbeddingModel:
                     # 1-unit outputs are invalid for identification; disable classification path
                     self.classification_head = None
                     has_classification = False
-                    logger.warning("Disabled 1-unit model for identification (forgery detection disabled - focus on owner identification only)")
+                    logger.warning("Disabled 1-unit model for identification (focus on owner identification only)")
                 else:
                     logger.info(f"Classification head has {output_shape[1]} outputs - treating as classifier")
             except Exception as e:
@@ -809,9 +804,9 @@ class SignatureEmbeddingModel:
         student_confidence = float(np.max(student_probs))
         logger.info(f"Classification prediction: class {predicted_student_id}, confidence {student_confidence:.3f}")
         
-        # Authenticity detection is disabled - focus on owner identification only
+        # System focuses on owner identification only
         authenticity_score = 0.0
-        is_genuine = True  # Always true since we're not doing forgery detection
+        is_genuine = True
         
         # Get student name and map class index to numeric student_id
         predicted_student_name = self.id_to_student.get(predicted_class_index, f"Unknown_{predicted_class_index}")
@@ -871,7 +866,7 @@ class SignatureEmbeddingModel:
             self.classification_head.save(classification_path)
             logger.info(f"Saved classification model to {classification_path}")
         
-        # Note: authenticity_head removed - forgery detection is disabled
+        # System focuses on owner identification only
         
         if self.siamese_model:
             siamese_path = f"{base_path}_siamese.keras"
@@ -921,7 +916,7 @@ class SignatureEmbeddingModel:
                 self.classification_head = keras.models.load_model(classification_path)
                 logger.info(f"Classification model loaded from {classification_path}")
             
-            # Note: authenticity model loading removed - forgery detection is disabled
+            # System focuses on owner identification only
             
             # Load Siamese model
             siamese_path = f"{base_path}_siamese.keras"

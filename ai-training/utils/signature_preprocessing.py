@@ -303,8 +303,8 @@ class SignatureAugmentation:
         """
         augmented = image.copy()
         
-        # Apply augmentations with different intensities for genuine vs forged
-        intensity = 1.0 if is_genuine else 0.6
+        # Apply augmentations for genuine signatures
+        intensity = 1.0
         
         # Rotation (simulate natural writing variations)
         if np.random.random() < 0.8 * intensity:

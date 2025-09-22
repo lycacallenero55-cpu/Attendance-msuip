@@ -152,7 +152,7 @@ class S3SupabaseSync:
         """Fix image counts for a specific student"""
         try:
             # Get actual counts from S3
-            genuine_count, forged_count = s3_count_student_signatures(student_id)
+            genuine_count = s3_count_student_signatures(student_id)
             
             # Get current DB records
             signatures = await db_manager.list_student_signatures(student_id)
@@ -170,7 +170,6 @@ class S3SupabaseSync:
             return {
                 'student_id': student_id,
                 's3_genuine_count': genuine_count,
-                's3_forged_count': forged_count,
                 'db_records_after_cleanup': len(valid_records),
                 'records_deleted': len(signatures) - len(valid_records)
             }
@@ -198,26 +197,23 @@ async def get_students_with_missing_images() -> List[Dict]:
     """Get students with missing S3 images"""
     return await sync_manager.get_students_with_missing_images()
 
-async def count_student_signatures(student_id: int) -> Tuple[int, int]:
-    """Count genuine and forged signatures for a student from S3"""
+async def count_student_signatures(student_id: int) -> int:
+    """Count genuine signatures for a student from S3"""
     try:
         # Get signatures from database and verify they exist in S3
         signatures = await db_manager.list_student_signatures(student_id)
         genuine_count = 0
-        forged_count = 0
         
         for sig in signatures:
             s3_key = sig.get('s3_key')
             if s3_key and object_exists(s3_key):
                 if sig.get('label') == 'genuine':
                     genuine_count += 1
-                elif sig.get('label') == 'forged':
-                    forged_count += 1
         
-        return genuine_count, forged_count
+        return genuine_count
     except Exception as e:
         logger.error(f"Error counting signatures for student {student_id}: {e}")
-        return 0, 0
+        return 0
 
 async def fix_student_image_counts(student_id: int) -> Dict:
     """Fix image counts for a specific student"""

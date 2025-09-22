@@ -25,11 +25,11 @@ def _derive_s3_key_from_url(url: str) -> str | None:
 @router.post("/signature")
 async def upload_signature(
     student_id: int = Form(...),
-    label: str = Form(...),  # 'genuine' | 'forged'
+    label: str = Form(...),  # 'genuine' only for owner identification
     file: UploadFile = File(...),
 ):
-    if label not in ("genuine", "forged"):
-        raise HTTPException(status_code=400, detail="label must be 'genuine' or 'forged'")
+    if label not in ("genuine",):
+        raise HTTPException(status_code=400, detail="label must be 'genuine' for owner identification")
     data = await file.read()
     try:
         key, url = upload_bytes(student_id, label, file.filename or "signature.png", data, file.content_type)
@@ -63,8 +63,8 @@ async def presign_upload(
     filename: str = Form(...),
     content_type: Optional[str] = Form(None),
 ):
-    if label not in ("genuine", "forged"):
-        raise HTTPException(status_code=400, detail="label must be 'genuine' or 'forged'")
+    if label not in ("genuine",):
+        raise HTTPException(status_code=400, detail="label must be 'genuine' for owner identification")
     try:
         post = create_presigned_post(student_id, label, filename, content_type)
         return {"success": True, **post}
@@ -115,7 +115,7 @@ async def delete_signature(record_id: int, s3_key: Optional[str] = None):
 async def students_with_images(summary: bool = False):
     try:
         if summary:
-            # Trust S3 as the source of truth: count objects under {student_id}/genuine|forged
+            # Trust S3 as the source of truth: count objects under {student_id}/genuine
             summarized = []
             try:
                 # List candidate student IDs from DB quickly, then verify counts from S3
@@ -127,12 +127,11 @@ async def students_with_images(summary: bool = False):
                     if sid is None or sid in seen:
                         continue
                     seen.add(sid)
-                    g, f = count_student_signatures(int(sid))
-                    if (g + f) > 0:
+                    g = count_student_signatures(int(sid))
+                    if g > 0:
                         summarized.append({
                             "student_id": int(sid),
                             "genuine_count": int(g),
-                            "forged_count": int(f),
                         })
             except Exception:
                 summarized = []

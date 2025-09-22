@@ -1,4 +1,65 @@
-from supabase import create_client, Client
+# Handle Supabase import compatibility issues
+# The issue is that supabase tries to import AuthorizationError and NotConnectedError from realtime
+# but these don't exist in the current version of the realtime package
+import sys
+import warnings
+
+# Monkey patch the realtime module to provide the missing classes
+try:
+    import realtime
+    # Add the missing classes if they don't exist
+    if not hasattr(realtime, 'AuthorizationError'):
+        class AuthorizationError(Exception):
+            pass
+        realtime.AuthorizationError = AuthorizationError
+    
+    if not hasattr(realtime, 'NotConnectedError'):
+        class NotConnectedError(Exception):
+            pass
+        realtime.NotConnectedError = NotConnectedError
+        
+    if not hasattr(realtime, 'AsyncRealtimeChannel'):
+        class AsyncRealtimeChannel:
+            pass
+        realtime.AsyncRealtimeChannel = AsyncRealtimeChannel
+        
+    if not hasattr(realtime, 'AsyncRealtimeClient'):
+        class AsyncRealtimeClient:
+            pass
+        realtime.AsyncRealtimeClient = AsyncRealtimeClient
+        
+    if not hasattr(realtime, 'RealtimeChannelOptions'):
+        class RealtimeChannelOptions:
+            pass
+        realtime.RealtimeChannelOptions = RealtimeChannelOptions
+except ImportError:
+    # If realtime doesn't exist at all, create a mock module
+    class MockRealtime:
+        class AuthorizationError(Exception):
+            pass
+        class NotConnectedError(Exception):
+            pass
+        class AsyncRealtimeChannel:
+            pass
+        class AsyncRealtimeClient:
+            pass
+        class RealtimeChannelOptions:
+            pass
+    
+    sys.modules['realtime'] = MockRealtime()
+
+# Now import Supabase
+try:
+    from supabase import create_client, Client
+except ImportError as e:
+    warnings.warn(f"Supabase import failed: {e}")
+    # Create stub implementations
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+    
+    def create_client(url, key):
+        return None
 from config import settings
 import logging
 
@@ -13,7 +74,11 @@ class DatabaseManager:
         try:
             if hasattr(settings, 'SUPABASE_URL') and settings.SUPABASE_URL:
                 self.client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-                logger.info("✅ Supabase client initialized successfully")
+                if self.client is not None:
+                    logger.info("✅ Supabase client initialized successfully")
+                else:
+                    logger.warning("⚠️ Supabase client creation failed - running in offline mode")
+                    self.client = None
             else:
                 logger.warning("⚠️ Supabase URL not configured - running in offline mode")
                 self.client = None
@@ -59,6 +124,9 @@ class DatabaseManager:
     
     async def create_trained_model(self, model_data: dict):
         """Create a new trained model record"""
+        if not self.client:
+            logger.warning("Database client not available - running in offline mode")
+            return None
         try:
             # Supabase Python v2 returns inserted rows by default (representation)
             response = self.client.table("trained_models").insert(model_data).execute()
@@ -69,6 +137,9 @@ class DatabaseManager:
     
     async def get_trained_models(self, student_id: int = None):
         """Get trained models, optionally filtered by student"""
+        if not self.client:
+            logger.warning("Database client not available - running in offline mode")
+            return []
         try:
             query = self.client.table("trained_models").select("*")
             if student_id:
@@ -213,6 +284,9 @@ class DatabaseManager:
             return False
 
     async def list_students_with_images(self):
+        if not self.client:
+            logger.warning("Database client not available - running in offline mode")
+            return []
         try:
             # Select distinct students with aggregated signatures
             response = self.client.rpc("list_students_with_images").execute()

@@ -146,7 +146,6 @@ def _get_fallback_response(endpoint_type="identify", student_id=None, error_mess
         "score": 0.0,
         "global_score": None,
         "student_confidence": 0.0,
-        "authenticity_score": 0.0,
         "predicted_student": {
             "id": 0,
             "name": "System Unavailable"
@@ -1692,8 +1691,6 @@ async def verify_signature(
                                     request_model_manager.embedding_model = model
                                 elif model_type == 'classification':
                                     request_model_manager.classification_head = model
-                                elif model_type == 'authenticity':
-                                    request_model_manager.authenticity_head = model
                                 elif model_type == 'siamese':
                                     request_model_manager.siamese_model = model
                                     

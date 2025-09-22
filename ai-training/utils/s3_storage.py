@@ -43,7 +43,8 @@ def _resolve_public_base_url() -> str:
 
 def make_key(student_id: int | str, label: str, filename: str) -> str:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "png"
-    safe_label = "genuine" if str(label).lower() == "genuine" else "forged"
+    # Only genuine signatures are used for owner identification
+    safe_label = "genuine"
     return f"{student_id}/{safe_label}/{uuid.uuid4().hex}.{ext}"
 
 
@@ -204,10 +205,9 @@ def count_objects_with_prefix(prefix: str) -> int:
     return total
 
 
-def count_student_signatures(student_id: int | str) -> tuple[int, int]:
-    """Return (genuine_count, forged_count) from S3 by listing prefixes."""
+def count_student_signatures(student_id: int | str) -> int:
+    """Return genuine_count from S3 by listing prefixes."""
     sid = str(student_id)
     genuine = count_objects_with_prefix(f"{sid}/genuine/")
-    forged = count_objects_with_prefix(f"{sid}/forged/")
-    return genuine, forged
+    return genuine
 

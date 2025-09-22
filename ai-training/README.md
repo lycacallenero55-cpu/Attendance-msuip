@@ -5,7 +5,7 @@ AI-powered signature verification training backend using TensorFlow and Supabase
 ## Important: Current Mode (Identification-First)
 
 - The system is currently configured to prioritize identifying the most likely owner of a submitted signature.
-- Forgery/anti-spoofing checks are disabled for now to focus engineering time on ownership detection accuracy.
+- The system focuses solely on owner identification accuracy.
 - Verification results will return the predicted student and a confidence score based on a fusion of global embeddings and per-student classification.
 - Image uploads are permanently stored in AWS S3, and re-uploads of the same image are allowed (no duplicate blocking).
 
@@ -74,7 +74,7 @@ python main.py
 
 ### Uploads & Storage
 - `POST /api/uploads/signature` - Upload a signature image for a student
-  - Form fields: `student_id`, `label` (`genuine`|`forged`), `file`
+  - Form fields: `student_id`, `label` (`genuine`), `file`
   - Behavior: uploads are stored permanently in S3; duplicate images are allowed
 - `GET /api/uploads/list?student_id=...` - List persisted signatures for previews
 
@@ -86,8 +86,7 @@ import requests
 
 # Upload images and start training
 files = {
-    'genuine_files': [open('genuine1.jpg', 'rb'), open('genuine2.jpg', 'rb')],
-    'forged_files': [open('forged1.jpg', 'rb')]
+    'genuine_files': [open('genuine1.jpg', 'rb'), open('genuine2.jpg', 'rb')]
 }
 data = {'student_id': 123}
 
@@ -132,5 +131,4 @@ Edit `.env` file to configure:
 
 ## Roadmap
 
-- Re-enable and refine forgery/anti-spoofing once identification accuracy is solid and time permits.
-- Improve centroid caching and model warm-loading for faster first request.
+- Continue improving owner identification accuracy and performance.
