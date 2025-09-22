@@ -508,8 +508,8 @@ const Students = () => {
           
         
           {/* Table View */}
-          <div className="border-t border-b border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+          <div className="border-t border-gray-200 overflow-hidden min-h-[378px]">
+                <table className="min-w-full divide-y divide-gray-200 border-b border-gray-200">
               <thead className="bg-gray-50">
                 <tr className="text-xs text-black h-8">
                   <th scope="col" className="px-3 py-2 text-left font-semibold uppercase">
@@ -633,11 +633,6 @@ const Students = () => {
                         </td>
                       </tr>
                     ))}
-                     {sortedStudents.length < 10 && Array.from({ length: 10 - sortedStudents.length }).map((_, idx) => (
-                       <tr key={`filler-${idx}`} className="h-8">
-                         <td colSpan={6} className="px-3 py-1">&nbsp;</td>
-                       </tr>
-                     ))}
                   </>
                 )}
               </tbody>

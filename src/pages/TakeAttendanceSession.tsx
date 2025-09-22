@@ -38,7 +38,6 @@ const TakeAttendanceSession = () => {
     totalScanned: 0,
     matched: 0,
     noMatch: 0,
-    // Removed potentialForgery - owner identification only
   });
   const [verificationResult, setVerificationResult] = useState<{
     match: boolean;
@@ -432,7 +431,6 @@ const TakeAttendanceSession = () => {
         totalScanned: prev.totalScanned + 1,
         matched: prev.matched + (result.match ? 1 : 0),
         noMatch: prev.noMatch + (!result.match ? 1 : 0),
-        // Removed potentialForgery - owner identification only
       }));
       
       if (result.success) {
@@ -474,7 +472,6 @@ const TakeAttendanceSession = () => {
       setStats(prev => ({
         ...prev,
         totalScanned: prev.totalScanned + 1,
-        // Removed potentialForgery - owner identification only
       }));
     } finally {
       setIsVerifying(false);
@@ -804,8 +801,6 @@ const TakeAttendanceSession = () => {
                 </div>
                 <p className="text-center text-muted-foreground text-sm mt-1">No Match</p>
               </div>
-
-              {/* Removed Potential Forgery - owner identification only */}
             </div>
           </CardContent>
         </Card>

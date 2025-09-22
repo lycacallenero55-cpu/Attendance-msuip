@@ -90,7 +90,7 @@ const Header = ({ isMobile = false }: HeaderProps) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [profileMode, setProfileMode] = useState<'display' | 'edit' | 'password'>('display');
-  const [profileForm, setProfileForm] = useState<{ full_name: string; email: string }>({ full_name: '', email: '' });
+  const [profileForm, setProfileForm] = useState<{ full_name: string; first_name: string; last_name: string; email: string }>({ full_name: '', first_name: '', last_name: '', email: '' });
   const [passwordForm, setPasswordForm] = useState<{ currentPassword: string; newPassword: string; confirmPassword: string }>({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPasswords, setShowPasswords] = useState<{ current: boolean; new: boolean; confirm: boolean }>({ current: false, new: false, confirm: false });
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
@@ -219,6 +219,8 @@ const Header = ({ isMobile = false }: HeaderProps) => {
     
     setProfileForm({
       full_name: fullName,
+      first_name: userProfile?.first_name || '',
+      last_name: userProfile?.last_name || '',
       email: userProfile?.email || user?.email || ''
     });
     setProfileMode('display');
@@ -230,26 +232,21 @@ const Header = ({ isMobile = false }: HeaderProps) => {
       if (!user) return;
       setIsUpdatingProfile(true);
       
-      // Split full name into first and last name
-      const nameParts = profileForm.full_name.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-      
       // Update either admin or users table depending on where the profile came from
       if (userRole === 'admin') {
         const { error } = await supabase
           .from('admin')
-          .update({ first_name: firstName, last_name: lastName })
+          .update({ first_name: profileForm.first_name, last_name: profileForm.last_name })
           .eq('id', user.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('users')
-          .update({ first_name: firstName, last_name: lastName })
+          .update({ first_name: profileForm.first_name, last_name: profileForm.last_name })
           .eq('id', user.id);
         if (error) throw error;
       }
-      setUserProfile((prev: any) => ({ ...prev, first_name: firstName, last_name: lastName, email: profileForm.email }));
+      setUserProfile((prev: any) => ({ ...prev, first_name: profileForm.first_name, last_name: profileForm.last_name, email: profileForm.email }));
       setProfileMode('display');
     } catch (e) {
       console.error('Failed to save profile:', e);
@@ -411,11 +408,11 @@ const Header = ({ isMobile = false }: HeaderProps) => {
           </DialogHeader>
           
           {/* Fixed height container to prevent layout shifts */}
-          <div className="min-h-[400px] space-y-4">
+          <div className="min-h-[300px] space-y-4">
             
             {/* Display Mode - Default */}
             {profileMode === 'display' && (
-              <div className="space-y-4">
+              <div className="flex flex-col h-full">
                 <div className="space-y-3">
                   <div>
                     <span className="text-sm font-medium text-gray-700">Full Name:</span>
@@ -431,21 +428,19 @@ const Header = ({ isMobile = false }: HeaderProps) => {
                   </div>
                 </div>
                 
-                <div className="flex gap-3">
+                <div className="flex gap-3 mt-auto pt-4 justify-center">
                   <Button 
                     variant="outline" 
                     onClick={() => setProfileMode('edit')}
-                    className="flex-1"
+                    className="w-32"
                   >
-                    <Edit className="h-4 w-4 mr-2" />
                     Edit Profile
                   </Button>
                   <Button 
                     variant="outline" 
                     onClick={() => setProfileMode('password')}
-                    className="flex-1"
+                    className="w-32"
                   >
-                    <Shield className="h-4 w-4 mr-2" />
                     Change Password
                   </Button>
                 </div>
@@ -454,16 +449,27 @@ const Header = ({ isMobile = false }: HeaderProps) => {
 
             {/* Edit Mode */}
             {profileMode === 'edit' && (
-              <div className="space-y-4">
+              <div className="flex flex-col h-full">
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="full_name">Full Name</Label>
-                    <Input 
-                      id="full_name" 
-                      value={profileForm.full_name} 
-                      onChange={(e) => setProfileForm(p => ({ ...p, full_name: e.target.value }))} 
-                      placeholder="Enter your full name"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="first_name">First Name</Label>
+                      <Input 
+                        id="first_name" 
+                        value={profileForm.first_name || ''} 
+                        onChange={(e) => setProfileForm(p => ({ ...p, first_name: e.target.value }))} 
+                        placeholder="Enter your first name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="last_name">Last Name</Label>
+                      <Input 
+                        id="last_name" 
+                        value={profileForm.last_name || ''} 
+                        onChange={(e) => setProfileForm(p => ({ ...p, last_name: e.target.value }))} 
+                        placeholder="Enter your last name"
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label htmlFor="email">Email</Label>
@@ -476,22 +482,20 @@ const Header = ({ isMobile = false }: HeaderProps) => {
                   </div>
                 </div>
                 
-                <div className="flex gap-3">
+                <div className="flex gap-3 mt-auto pt-4 justify-center">
                   <Button 
                     variant="outline" 
                     onClick={() => setProfileMode('display')}
-                    className="flex-1"
+                    className="w-32"
                   >
-                    <X className="h-4 w-4 mr-2" />
                     Cancel
                   </Button>
                   <Button 
                     onClick={handleProfileSave} 
                     disabled={isUpdatingProfile}
-                    className="flex-1"
+                    className="w-32"
                   >
-                    <Save className="h-4 w-4 mr-2" />
-                    {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
+                    {isUpdatingProfile ? 'Saving...' : 'Save'}
                   </Button>
                 </div>
               </div>
@@ -499,7 +503,7 @@ const Header = ({ isMobile = false }: HeaderProps) => {
 
             {/* Password Change Mode */}
             {profileMode === 'password' && (
-              <div className="space-y-4">
+              <div className="flex flex-col h-full">
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="currentPassword">Current Password</Label>
@@ -566,22 +570,20 @@ const Header = ({ isMobile = false }: HeaderProps) => {
                   </div>
                 </div>
                 
-                <div className="flex gap-3">
+                <div className="flex gap-3 mt-auto pt-4 justify-center">
                   <Button 
                     variant="outline" 
                     onClick={() => setProfileMode('display')}
-                    className="flex-1"
+                    className="w-32"
                   >
-                    <X className="h-4 w-4 mr-2" />
                     Cancel
                   </Button>
                   <Button 
                     onClick={handlePasswordChange} 
                     disabled={isChangingPassword}
-                    className="flex-1"
+                    className="w-32"
                   >
-                    <Shield className="h-4 w-4 mr-2" />
-                    {isChangingPassword ? 'Changing...' : 'Change Password'}
+                    {isChangingPassword ? 'Changing...' : 'Change'}
                   </Button>
                 </div>
               </div>

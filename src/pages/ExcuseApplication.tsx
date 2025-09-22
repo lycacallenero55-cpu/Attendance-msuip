@@ -25,6 +25,7 @@ import {
   Eye,
   EyeOff,
   FileImage,
+  List,
   MoreHorizontal,
   Plus,
   Search,
@@ -612,8 +613,8 @@ const ExcuseApplicationContent = () => {
         </div>
         
         {/* Table View */}
-        <div className="border-t border-b border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="border-t border-gray-200 overflow-hidden min-h-[378px]">
+                <table className="min-w-full divide-y divide-gray-200 border-b border-gray-200">
             <thead className="bg-gray-50">
               <tr className="text-xs text-black h-8">
                 <th scope="col" className="px-3 py-2 text-left font-semibold uppercase">
@@ -706,7 +707,7 @@ const ExcuseApplicationContent = () => {
                               setIsViewOpen(true);
                             }}
                           >
-                            <Eye className="h-3 w-3 text-black" />
+                            <List className="h-3 w-3 text-green-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                           <Button
                             variant="outline"
@@ -725,7 +726,7 @@ const ExcuseApplicationContent = () => {
                               setIsFormOpen(true);
                             }}
                           >
-                            <Edit className="h-3 w-3 text-black" />
+                            <Edit className="h-3 w-3 text-yellow-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                           <Button
                             variant="outline"
@@ -736,15 +737,10 @@ const ExcuseApplicationContent = () => {
                               setShowDeleteConfirm(true);
                             }}
                           >
-                            <Trash2 className="h-3 w-3 text-black" />
+                            <Trash2 className="h-3 w-3 text-red-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                  {filteredExcuses.length < 10 && Array.from({ length: 10 - filteredExcuses.length }).map((_, idx) => (
-                    <tr key={`filler-${idx}`} className="h-8">
-                      <td colSpan={6} className="px-3 py-1">&nbsp;</td>
                     </tr>
                   ))}
                 </>
@@ -914,145 +910,142 @@ const ExcuseApplicationContent = () => {
           setIsDragging(false);
         }
       }}>
-        <DialogContent className="max-w-4xl w-full h-[85vh] flex flex-col">
+        <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>Excuse Application Details</DialogTitle>
           </DialogHeader>
           {selectedExcuse && (
             <div className="flex flex-col flex-1 overflow-hidden">
-              {/* Information Section - Scrollable */}
-              <div className="flex-1 overflow-y-auto pr-2 mb-4">
-                <div className="space-y-4">
-                  {/* Student Information */}
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Student</Label>
-                    <p className="text-base text-gray-900 mt-1">
-                      {selectedExcuse.students?.firstname || 'Unknown'} {selectedExcuse.students?.surname || 'Student'}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      ID: {selectedExcuse.students?.student_id || 'N/A'} • {selectedExcuse.students?.program || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* Status */}
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Status</Label>
-                    <div className="mt-1">
-                      {getStatusBadge(selectedExcuse.status)}
-                    </div>
-                  </div>
-
-                  {/* Absence Date */}
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Absence Date</Label>
-                    <p className="text-base text-gray-900 mt-1">
-                      {format(new Date(selectedExcuse.absence_date), 'EEEE, MMMM d, yyyy')}
-                    </p>
-                  </div>
-
-                  {/* Review Notes */}
-                  {selectedExcuse.review_notes && (
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Review Notes</Label>
-                      <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap bg-gray-50 p-3 rounded border">
-                        {selectedExcuse.review_notes}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Created Date */}
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Created</Label>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {format(new Date(selectedExcuse.created_at), 'MMM d, yyyy h:mm a')}
-                    </p>
-                  </div>
-
-                  {/* Actions Section */}
-                  {selectedExcuse.status === 'pending' && (
-                    <div className="pt-4 border-t border-gray-200">
-                      <Label className="text-sm font-medium text-gray-700 mb-3 block">Actions</Label>
-                      <div className="flex gap-3">
-                        <Button
-                          variant="outline"
-                          className="flex-1 text-green-600 border-green-200 hover:bg-green-50 transition-colors"
-                          onClick={() => handleUpdateStatus(selectedExcuse.id, 'approved')}
-                        >
-                          <Check className="h-4 w-4 mr-2" />
-                          Approve
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="flex-1 text-red-600 border-red-200 hover:bg-red-50 transition-colors"
-                          onClick={() => handleUpdateStatus(selectedExcuse.id, 'rejected')}
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          Reject
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+              {/* Main Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+                {/* Student Information */}
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Student</Label>
+                  <p className="text-base text-gray-900 mt-1">
+                    {selectedExcuse.students?.firstname || 'Unknown'} {selectedExcuse.students?.surname || 'Student'}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    ID: {selectedExcuse.students?.student_id || 'N/A'} • {selectedExcuse.students?.program || 'N/A'}
+                  </p>
                 </div>
-              </div>
 
-              {/* Image Section - Fixed height */}
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-medium text-gray-700">Excuse Letter</Label>
-                  {selectedExcuse.documentation_url && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleZoomChange(Math.max(0.5, imageZoom - 0.25))}
-                      >
-                        <ZoomOut className="h-4 w-4" />
-                      </Button>
-                      <span className="text-xs text-muted-foreground">{Math.round(imageZoom * 100)}%</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleZoomChange(Math.min(3, imageZoom + 0.25))}
-                      >
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleZoomChange(1)}
-                        className="ml-2"
-                      >
-                        Reset
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                
-                {selectedExcuse.documentation_url ? (
-                  <div 
-                    className="border rounded-lg overflow-hidden bg-gray-50 relative cursor-grab active:cursor-grabbing h-64"
-                    onMouseDown={handleImageMouseDown}
-                    onMouseMove={handleImageMouseMove}
-                    onMouseUp={handleImageMouseUp}
-                    onMouseLeave={handleImageMouseUp}
-                  >
-                    <img 
-                      src={selectedExcuse.documentation_url} 
-                      alt="Excuse letter" 
-                      className="transition-transform duration-200 max-w-none object-contain w-full h-full"
-                      style={{ 
-                        transform: `scale(${imageZoom}) translate(${imagePan.x}px, ${imagePan.y}px)`,
-                        transformOrigin: 'center center'
-                      }}
-                      draggable={false}
-                    />
+                {/* Status */}
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Status</Label>
+                  <div className="mt-1">
+                    {getStatusBadge(selectedExcuse.status)}
                   </div>
-                ) : (
-                  <div className="h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
-                    <p className="text-sm text-gray-400">No excuse letter attached</p>
+                </div>
+
+                {/* Absence Date */}
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Absence Date</Label>
+                  <p className="text-base text-gray-900 mt-1">
+                    {format(new Date(selectedExcuse.absence_date), 'EEEE, MMMM d, yyyy')}
+                  </p>
+                </div>
+
+                {/* Review Notes */}
+                {selectedExcuse.review_notes && (
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Review Notes</Label>
+                    <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap bg-gray-50 p-3 rounded border">
+                      {selectedExcuse.review_notes}
+                    </p>
                   </div>
                 )}
+
+                {/* Created Date */}
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Created</Label>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {format(new Date(selectedExcuse.created_at), 'MMM d, yyyy h:mm a')}
+                  </p>
+                </div>
+
+                {/* Image Section - Larger */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm font-medium text-gray-700">Excuse Letter</Label>
+                    {selectedExcuse.documentation_url && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleZoomChange(Math.max(0.5, imageZoom - 0.25))}
+                        >
+                          <ZoomOut className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground">{Math.round(imageZoom * 100)}%</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleZoomChange(Math.min(3, imageZoom + 0.25))}
+                        >
+                          <ZoomIn className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleZoomChange(1)}
+                          className="ml-2"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {selectedExcuse.documentation_url ? (
+                    <div 
+                      className="border rounded-lg overflow-hidden bg-gray-50 relative cursor-grab active:cursor-grabbing h-96"
+                      onMouseDown={handleImageMouseDown}
+                      onMouseMove={handleImageMouseMove}
+                      onMouseUp={handleImageMouseUp}
+                      onMouseLeave={handleImageMouseUp}
+                    >
+                      <img 
+                        src={selectedExcuse.documentation_url} 
+                        alt="Excuse letter" 
+                        className="transition-transform duration-200 max-w-none object-contain w-full h-full"
+                        style={{ 
+                          transform: `scale(${imageZoom}) translate(${imagePan.x}px, ${imagePan.y}px)`,
+                          transformOrigin: 'center center'
+                        }}
+                        draggable={false}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-96 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                      <p className="text-sm text-gray-400">No excuse letter attached</p>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Actions Section - Fixed at bottom */}
+              {selectedExcuse.status === 'pending' && (
+                <div className="flex-shrink-0 pt-4 border-t border-gray-200 mt-4">
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      className="flex-1 text-green-600 border-green-200 hover:bg-green-50 transition-colors"
+                      onClick={() => handleUpdateStatus(selectedExcuse.id, 'approved')}
+                    >
+                      <Check className="h-4 w-4 mr-2" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 text-red-600 border-red-200 hover:bg-red-50 transition-colors"
+                      onClick={() => handleUpdateStatus(selectedExcuse.id, 'rejected')}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

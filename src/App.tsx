@@ -8,10 +8,10 @@ import Attendance from "./pages/Attendance";
 import Reports from "./pages/Reports";
 import Students from "./pages/Students";
 import Sessions from "./pages/Sessions";
-import SessionStudents from "./pages/SessionStudents";
 import TakeAttendance from "./pages/TakeAttendance";
 import TakeAttendanceSession from "./pages/TakeAttendanceSession";
 import Accounts from "./pages/Accounts";
+import OfficerAccounts from "./pages/OfficerAccounts";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import ExcuseApplication from "./pages/ExcuseApplication";
@@ -93,14 +93,6 @@ const AppRoutes = () => {
         </ProtectedRoute>
       }
     />
-    <Route
-      path="/sessions/:sessionId/students"
-      element={
-        <ProtectedRoute>
-          <SessionStudents />
-        </ProtectedRoute>
-      }
-    />
     <Route path="/take-attendance">
       <Route
         index
@@ -126,6 +118,16 @@ const AppRoutes = () => {
         <ProtectedRoute>
           <RoleProtectedRoute allowedRoles={['admin']}>
             <Accounts />
+          </RoleProtectedRoute>
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/officer-accounts"
+      element={
+        <ProtectedRoute>
+          <RoleProtectedRoute allowedRoles={['ROTC admin']}>
+            <OfficerAccounts />
           </RoleProtectedRoute>
         </ProtectedRoute>
       }
@@ -162,7 +164,7 @@ const AppRoutes = () => {
       path="/signature-ai"
       element={
         <ProtectedRoute>
-          <RoleProtectedRoute allowedRoles={['admin', 'ROTC admin', 'Instructor', 'SSG officer']}>
+          <RoleProtectedRoute allowedRoles={['admin']}>
             <SignatureAI />
           </RoleProtectedRoute>
         </ProtectedRoute>

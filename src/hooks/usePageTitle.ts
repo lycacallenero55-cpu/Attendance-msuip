@@ -12,8 +12,11 @@ const routeTitles: Record<string, string> = {
   '/schedule': 'Sessions',
   '/take-attendance': 'Take Attendance',
   '/accounts': 'Accounts',
+  '/officer-accounts': 'Officer Accounts',
   '/excuse-application': 'Excuse Application',
   '/academic-year': 'Allowed Terms',
+  '/subjects': 'Subjects',
+  '/signature-ai': 'Model Training',
   '/login': 'Login',
   '/sessions': 'Session Students',
 };

@@ -370,6 +370,13 @@ const Dashboard = () => {
     }));
   }, [chartData]);
 
+  // Redirect ROTC Officer to Take Attendance page
+  useEffect(() => {
+    if (userRole === 'ROTC officer') {
+      navigate('/take-attendance');
+    }
+  }, [userRole, navigate]);
+
   return (
     <div className="flex-1 space-y-4 px-6 py-4 opacity-100 transition-opacity duration-300">
       {/* Header Section */}

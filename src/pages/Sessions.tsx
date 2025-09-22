@@ -15,8 +15,9 @@ import {
   MapPin,
   SquarePen,
   Trash2,
-  CalendarClock
-} from 'lucide-react';
+  CalendarClock,
+  List
+} from "lucide-react";
 
 // UI Components
 import Layout from "@/components/Layout";
@@ -59,7 +60,8 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 
 // Custom Components and Services
-import AttendanceForm from "@/components/AttendanceForm";
+import AttendanceForm from '@/components/AttendanceForm';
+import SessionStudents from '@/components/SessionStudents';
 import { 
   fetchSessions, 
   createSession, 
@@ -232,6 +234,8 @@ const Schedule = () => {
   const [editingSession, setEditingSession] = useState<SessionDataWithId | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<number | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isStudentsModalOpen, setIsStudentsModalOpen] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -1049,6 +1053,14 @@ const Schedule = () => {
     setIsDeleteDialogOpen(true);
   };
 
+  const handleViewStudents = (sessionId: number) => {
+    setSelectedSessionId(sessionId);
+    setIsStudentsModalOpen(true);
+  };
+
+  // Get selected session data for modal title
+  const selectedSession = sessions.find(session => session.id === selectedSessionId);
+
   // Function to handle deleting a session
   const handleDeleteSession = async () => {
     if (!sessionToDelete) return;
@@ -1221,6 +1233,30 @@ const Schedule = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Session Students Modal */}
+      <Dialog open={isStudentsModalOpen} onOpenChange={(open) => {
+        setIsStudentsModalOpen(open);
+        if (!open) {
+          setSelectedSessionId(null);
+        }
+      }}>
+        <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-education-navy text-lg">{selectedSession?.title || 'Session Students'}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto flex flex-col">
+            {selectedSessionId && (
+              <SessionStudents 
+                sessionId={selectedSessionId} 
+                onClose={() => setIsStudentsModalOpen(false)} 
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      
       <PageWrapper skeletonType="table">
         <div className="px-6 py-4">
           <div className="mb-3">
@@ -1286,7 +1322,7 @@ const Schedule = () => {
                 </div>
               ) : paginatedSessions.length > 0 ? (
                 [...paginatedSessions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((session) => (
-                <Card key={session.id} className="bg-gradient-card border border-gray-200 shadow-card">
+                <Card key={session.id} className="bg-gradient-card border border-gray-100 shadow-card">
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-start gap-3">
@@ -1333,10 +1369,10 @@ const Schedule = () => {
                             variant="outline" 
                             size="sm"
                             className="h-8 w-8 p-0"
-                            onClick={() => navigate(`/sessions/${session.id}/students`)}
+                            onClick={() => handleViewStudents(session.id)}
                             title="View Students"
                           >
-                            <Users className="h-4 w-4" />
+                            <List className="h-4 w-4 text-green-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                           <Button 
                             variant="outline"
@@ -1345,16 +1381,16 @@ const Schedule = () => {
                             onClick={() => handleEditSession(session)}
                             title="Edit Session"
                           >
-                            <SquarePen className="h-4 w-4" />
+                            <SquarePen className="h-4 w-4 text-yellow-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                           <Button 
                             variant="outline"
                             size="sm"
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            className="h-8 w-8 p-0"
                             onClick={() => confirmDeleteSession(session.id)}
                             title="Delete Session"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4 text-red-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                         </div>
                       </div>

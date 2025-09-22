@@ -453,12 +453,10 @@ const SignatureAI = () => {
           if (card.id !== cardId) return card;
           // Revoke previews to avoid memory leaks
           card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-          // Skip forged files cleanup - owner identification only
           return {
             ...card,
             student: null,
             genuineFiles: [],
-            // Removed forgedFiles - owner identification only
           };
         });
       }
@@ -466,7 +464,6 @@ const SignatureAI = () => {
       const card = prev.find(c => c.id === cardId);
       if (card) {
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-        // Skip forged files cleanup - owner identification only
       }
       
       return prev.filter(c => c.id !== cardId);
@@ -496,11 +493,9 @@ const SignatureAI = () => {
       const card = studentCards.find(c => c.id === currentCardId);
       if (card && hasUploadedImages(card) && card.student && card.student.id !== student.id) {
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-        // Skip forged files cleanup - owner identification only
         updateStudentCard(currentCardId, {
           student,
           genuineFiles: [],
-          // Removed forgedFiles - owner identification only
         });
         toast({
           title: "Student Changed",
@@ -512,10 +507,9 @@ const SignatureAI = () => {
         (async () => {
           try {
             const persisted = await aiService.listSignatures(student.id);
-            const toPreview = (rec: { id:number; s3_url:string; s3_key:string; label:'genuine'|'forged' }) => ({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: rec.label } as TrainingFile);
+            const toPreview = (rec: { id:number; s3_url:string; s3_key:string; label:'genuine' }) => ({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: rec.label } as TrainingFile);
             updateStudentCard(currentCardId, {
               genuineFiles: persisted.filter(x => x.label === 'genuine').map(x => toPreview(x)),
-              // Removed forgedFiles - owner identification only
             });
           } catch (e) {
             // ignore
@@ -640,7 +634,6 @@ const SignatureAI = () => {
       if (card.id === cardId) {
         // Revoke all object URLs to prevent memory leaks
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
-        // Skip forged files cleanup - owner identification only
         return { ...card, genuineFiles: [] };
       }
       return card;
@@ -900,7 +893,7 @@ const SignatureAI = () => {
   }, [isTraining]);
 
   // Modal Functions
-  type ModalContext = { kind: 'training', setType: 'genuine' | 'forged', cardId: string } | { kind: 'verification' } | null;
+  type ModalContext = { kind: 'training', setType: 'genuine', cardId: string } | { kind: 'verification' } | null;
   const [modalContext, setModalContext] = useState<ModalContext>(null);
   
   const getModalFilename = (): string => {
@@ -955,9 +948,10 @@ const SignatureAI = () => {
         if (idx !== -1) removeTrainingFile(idx, 'genuine', modalContext.cardId);
         const updated = card.genuineFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
         setModalImages(updated);
+      }
+      setModalImageIndex(prev => Math.max(0, prev - (modalImages.length === 1 ? 0 : 1)));
+      if (modalImages.length <= 1) closeImageModal();
     }
-    setModalImageIndex(prev => Math.max(0, prev - (modalImages.length === 1 ? 0 : 1)));
-    if (modalImages.length <= 1) closeImageModal();
   };
 
   const handleVerifySignature = async () => {
@@ -1003,6 +997,38 @@ const SignatureAI = () => {
     }
   };
 
+  const isInitialized = studentCards && allStudents;
+
+  useEffect(() => {
+    console.log('Component fully mounted with state:', {
+      isInitialized,
+      students: safeAllStudents.length,
+      cards: safeStudentCards.length,
+      training: isTraining,
+      models: trainedModels.length
+    });
+
+    // Test error boundary in development
+    if (process.env.NODE_ENV === 'development') {
+      // Uncomment to test error boundary
+      // throw new Error('Testing error boundary');
+    }
+  }, [isInitialized]);
+
+  if (!isInitialized) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-screen">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <span className="ml-2">Initializing signature recognition...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  const safeStudentCards = studentCards || [];
+  const safeAllStudents = allStudents || [];
+
   return (
     <Layout>
       <div
@@ -1012,7 +1038,7 @@ const SignatureAI = () => {
       >
         {/* Page Header */}
         <div className="space-y-0.5">
-          <h1 className="text-lg font-bold text-education-navy">SIGNATURE AI TRAINING & VERIFICATION</h1>
+          <h1 className="text-lg font-bold text-education-navy">MODEL TRAINING & VERIFICATION</h1>
           <p className="text-sm text-muted-foreground">
             Train AI models for multiple students and verify signatures using machine learning
           </p>
@@ -1046,7 +1072,7 @@ const SignatureAI = () => {
                         if (isLocked) return;
                         try {
                           const items = await aiService.listStudentsWithImages();
-                          const byId = new Map(allStudents.map(s => [s.id, s]));
+                          const byId = new Map(safeAllStudents.map(s => [s.id, s]));
                           
                           // Filter out students with missing S3 images and validate counts
                           const validItems = [];
@@ -1054,7 +1080,6 @@ const SignatureAI = () => {
                             if (item.student_id && byId.has(item.student_id)) {
                               const student = byId.get(item.student_id);
                               const genuineCount = item.genuine_count || 0;
-                              // Removed forged_count - owner identification only
                               
                               // Only include students with actual images (not just DB records)
                               if (student && genuineCount > 0) {
@@ -1078,25 +1103,23 @@ const SignatureAI = () => {
                           // Add cards for these students with immediate display
                           let addedIds: number[] = [];
                           setStudentCards(prev => {
-                            const existingIds = new Set(prev.filter(c => c.student).map(c => (c.student as any).id));
+                            const existingIds = new Set(prev.filter(c => c.student).map(c => (c.student as Student).id));
                             const newCards = validItems
                               .filter(x => !existingIds.has(x.student.id))
                               .map(x => ({ 
                                 id: `${Date.now()}-${x.student.id}`, 
-                                student: x.student, 
-                                // Removed forgedFiles - owner identification only 
+                                student: x.student,
                                 isExpanded: true, 
-                                genuineCount: x.genuine_count, 
+                                genuineCount: x.genuine_count,
                                 // Add placeholder files to show loading state
                                 genuineFiles: Array(x.genuine_count).fill(null).map((_, i) => ({
-                                  file: new File([], `placeholder-${i}`),
+                                  file: new File([], 'placeholder-' + i),
                                   preview: '',
                                   placeholder: true,
                                   label: 'genuine' as const
                                 })),
-                                // Removed forgedFiles - owner identification only
                               }));
-                            addedIds = newCards.map(c => (c.student as any).id);
+                            addedIds = newCards.map(c => (c.student as Student).id);
                             const merged = [...prev, ...newCards];
                             // Remove placeholder empty card if real students exist
                             const hasReal = merged.some(c => !!c.student);
@@ -1120,8 +1143,6 @@ const SignatureAI = () => {
                                   s3Key: s.s3_key,
                                   label: s.label as 'genuine'
                                 }));
-                              // Removed forgedFiles - owner identification only
-                              
                               // Update the card with actual images
                               setStudentCards(prev => prev.map(card => 
                                 card.student?.id === item.student.id 
@@ -1140,9 +1161,7 @@ const SignatureAI = () => {
                                   ? { 
                                       ...card, 
                                       genuineFiles: [],
-                                      // Removed forgedFiles - owner identification only
                                       genuineCount: 0,
-                                      // Removed forgedCount - owner identification only
                                     }
                                   : card
                               ));
@@ -1207,7 +1226,7 @@ const SignatureAI = () => {
             <div className={`grid ${isViewingModels ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-6'} gap-2 min-h-[424px] max-h-[424px] overflow-auto pr-1 content-start justify-start auto-rows-[40px] items-start`}>
               {!isViewingModels ? (
                 <>
-                  {studentCards.map((card, index) => (
+                  {safeStudentCards.map((card, index) => (
                     <div key={card.id}>
                       <StudentTrainingCard
                         card={card}
@@ -1494,7 +1513,7 @@ const SignatureAI = () => {
                 )}
                 
                 <div className="text-center text-sm text-muted-foreground">
-                  {studentCards.filter(c => c.student).length} students • {getTotalTrainingData().genuine} samples ready
+                  {safeStudentCards.filter(c => c.student).length} students • {getTotalTrainingData().genuine} samples ready
                   {/* Owner identification only */}
                 </div>
               </div>
@@ -1863,7 +1882,7 @@ const SignatureAI = () => {
                     onClick={() => {
                       if (studentSelectMode === 'bulkAdd') {
                         if (selectedStudentIds.size === 0) return setIsStudentDialogOpen(false);
-                        const selected = allStudents.filter(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
+                        const selected = safeAllStudents.filter(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
                         setStudentCards(prev => {
                           let base = prev;
                           if (
@@ -1880,7 +1899,7 @@ const SignatureAI = () => {
                         });
                         setIsStudentDialogOpen(false);
                       } else {
-                        const chosen = allStudents.find(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
+                        const chosen = safeAllStudents.find(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
                         if (chosen && currentCardId) {
                           handleStudentSelection(chosen);
                           setIsStudentDialogOpen(false);
@@ -1905,7 +1924,7 @@ const SignatureAI = () => {
             </DialogHeader>
             <div className="flex flex-col gap-0 h-full">
               {currentFormCardId && (() => {
-                const card = studentCards.find(c => c.id === currentFormCardId);
+                const card = safeStudentCards.find(c => c.id === currentFormCardId);
                 if (!card) return null;
                 
                 return (
@@ -1955,37 +1974,25 @@ const SignatureAI = () => {
 
                     {/* Upload Buttons - Original Layout */}
                     {card.student && (
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex items-center gap-2 hover:bg-transparent hover:text-foreground opacity-50 cursor-not-allowed"
-                          disabled={true}
-                          title="Forgery detection is disabled - focus on owner identification only"
-                        >
-                          <Upload className="w-4 h-4" />
-                          Forged (Disabled)
-                        </Button>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="flex items-center gap-2"
-                          onClick={() => {
-                            const input = document.createElement('input');
-                            input.type = 'file';
-                            input.accept = 'image/*';
-                            input.multiple = true;
-                            input.onchange = (e) => {
-                              const files = Array.from((e.target as HTMLInputElement).files || []);
-                              handleTrainingFilesChange(files, 'genuine', card.id);
-                            };
-                            input.click();
-                          }}
-                        >
-                          <Upload className="w-4 h-4" />
-                          Genuine
-                        </Button>
-                      </div>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="flex items-center gap-2 w-fit mt-2"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.multiple = true;
+                          input.onchange = (e) => {
+                            const files = Array.from((e.target as HTMLInputElement).files || []);
+                            handleTrainingFilesChange(files, 'genuine', card.id);
+                          };
+                          input.click();
+                        }}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Genuine
+                      </Button>
                     )}
 
                     {/* Training Images Preview - Expands to fill space with compact grid and toggles */}
@@ -2101,6 +2108,5 @@ const SignatureAI = () => {
     </Layout>
   );
 };
-}
 
 export default SignatureAI;

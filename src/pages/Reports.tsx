@@ -9,7 +9,7 @@ import {
   Search, 
   Filter, 
   Download, 
-  Eye, 
+  List,
   Calendar,
   Users,
   BookOpen,
@@ -218,7 +218,7 @@ const Reports = () => {
 
                     <div className="flex gap-1">
                       <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                        <Eye className="w-3.5 h-3.5" />
+                        <List className="w-3.5 h-3.5 text-green-600" />
                       </Button>
                       <Button variant="outline" size="sm" className="h-8 w-8 p-0">
                         <Download className="w-3.5 h-3.5" />

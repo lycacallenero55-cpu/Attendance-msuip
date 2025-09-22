@@ -9,11 +9,7 @@ const headers = [
   'program',
   'year',
   'section',
-  'sex',
-  'address',
-  'birthday',
-  'contact_no',
-  'email'
+  'sex'
 ];
 
 // Create a new workbook
@@ -32,11 +28,7 @@ const exampleData = [
     program: 'Computer Science',
     year: '1st',
     section: 'BSCS 1A',
-    sex: 'Male',
-    address: '123 Main St',
-    birthday: '2005-05-15',
-    contact_no: '09123456789',
-    email: 'john.doe@example.com'
+    sex: 'Male'
   },
   {
     surname: 'Smith',
@@ -46,11 +38,7 @@ const exampleData = [
     program: 'Information Technology',
     year: '2nd',
     section: 'BSIT 2B',
-    sex: 'Female',
-    address: '456 Oak Ave',
-    birthday: '2004-08-22',
-    contact_no: '09123456780',
-    email: 'jane.smith@example.com'
+    sex: 'Female'
   }
 ];
 

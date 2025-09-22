@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, Search, Trash2, Edit, Loader2, ChevronsUp, ChevronsDown } from "lucide-react";
+import { Calendar, Plus, Search, Trash2, Edit, Loader2, ChevronsUp, ChevronsDown, List } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabase";
@@ -45,6 +45,8 @@ const AllowedTermsContent = () => {
   }>({ academic_year: '', semester: '', start_date: '', end_date: '' });
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [editingTerm, setEditingTerm] = useState<AllowedTerm | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
+  const [termToDelete, setTermToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAllowedTerms();
@@ -137,16 +139,24 @@ const AllowedTermsContent = () => {
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this allowed term?')) return;
+  const handleDelete = (id: string) => {
+    setTermToDelete(id);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!termToDelete) return;
     try {
-      const { error } = await supabase.from('allowed_terms').delete().eq('id', id);
+      const { error } = await supabase.from('allowed_terms').delete().eq('id', termToDelete);
       if (error) throw error;
       toast({ title: 'Deleted', description: 'Allowed term removed.' });
       fetchAllowedTerms();
     } catch (error) {
       console.error('Delete error:', error);
       toast({ title: 'Error', description: 'Failed to delete allowed term', variant: 'destructive' });
+    } finally {
+      setIsDeleteConfirmOpen(false);
+      setTermToDelete(null);
     }
   };
 
@@ -246,8 +256,8 @@ const AllowedTermsContent = () => {
         </div>
 
         {/* Table View */}
-        <div className="border-t border-b border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="border-t border-gray-200 overflow-hidden min-h-[378px]">
+                <table className="min-w-full divide-y divide-gray-200 border-b border-gray-200">
             <thead className="bg-gray-50">
               <tr className="text-xs text-black h-8">
                 <th scope="col" className="px-3 py-2 text-left font-semibold uppercase">
@@ -294,7 +304,7 @@ const AllowedTermsContent = () => {
                             className="h-6 w-6 p-0"
                             onClick={() => handleEdit(term)}
                           >
-                            <Edit className="h-3 w-3 text-black" />
+                            <Edit className="h-3 w-3 text-yellow-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                           <Button
                             variant="outline"
@@ -302,15 +312,10 @@ const AllowedTermsContent = () => {
                             className="h-6 w-6 p-0"
                             onClick={() => handleDelete(term.id)}
                           >
-                            <Trash2 className="h-3 w-3 text-black" />
+                            <Trash2 className="h-3 w-3 text-red-600 transform hover:scale-125 transition-transform duration-200 ease-in-out" />
                           </Button>
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                  {paginatedTerms.length < 10 && Array.from({ length: 10 - paginatedTerms.length }).map((_, idx) => (
-                    <tr key={`filler-${idx}`} className="h-8">
-                      <td colSpan={3} className="px-3 py-1">&nbsp;</td>
                     </tr>
                   ))}
                 </>
@@ -380,6 +385,31 @@ const AllowedTermsContent = () => {
               disabled={!formData.academic_year || !formData.semester || !formData.start_date || !formData.end_date}
             >
               {editingTerm ? 'Update' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={(open) => {
+        setIsDeleteConfirmOpen(open);
+        if (!open) {
+          setTermToDelete(null);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this allowed term? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

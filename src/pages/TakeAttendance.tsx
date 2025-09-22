@@ -14,7 +14,6 @@ import {
   CalendarDays, 
   List, 
   Star,
-  RefreshCw,
   BookOpen,
   Users,
   CalendarClock
@@ -285,17 +284,6 @@ const TakeAttendanceContent: React.FC = () => {
           <p className="text-sm text-muted-foreground">
             Select a session to take attendance
           </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchSessions}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
         </div>
       </div>
 

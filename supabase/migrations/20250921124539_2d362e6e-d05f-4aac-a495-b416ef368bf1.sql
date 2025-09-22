@@ -20,11 +20,11 @@ BEGIN
     END;
 END $$;
 
--- Clean up global trained models table - remove forgery-related columns
+-- Clean up global trained models table - remove unused columns
 ALTER TABLE public.global_trained_models 
 DROP COLUMN IF EXISTS forged_count;
 
--- Clean up trained models table - remove forgery-related columns  
+-- Clean up trained models table - remove unused columns  
 ALTER TABLE public.trained_models
 DROP COLUMN IF EXISTS forged_count;
 

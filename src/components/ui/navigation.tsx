@@ -96,12 +96,12 @@ const getNavItems = (userRole: string = '') => {
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
       },
-      { icon: Brain, label: "Signature AI", href: "/signature-ai" },
+      { icon: Brain, label: "Model Training", href: "/signature-ai" },
       { icon: CalendarDays, label: "Allowed Terms", href: "/academic-year" },
       { icon: UserCog, label: "Accounts", href: "/accounts" }
     ];
   } else if (userRole === 'ROTC admin') {
-    // ROTC Admin - same as admin but subject and allowed terms is restricted or hidden
+    // ROTC Admin - same as admin but without Signature AI, Allowed Terms, and Subjects
     return [
       { icon: LayoutDashboard, label: "Dashboard", href: "/" },
       { 
@@ -124,8 +124,7 @@ const getNavItems = (userRole: string = '') => {
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
       },
-      { icon: Brain, label: "Signature AI", href: "/signature-ai" },
-      { icon: UserCog, label: "Accounts", href: "/accounts" }
+      { icon: UserCog, label: "Accounts", href: "/officer-accounts" }
     ];
   } else if (userRole === 'Instructor') {
     // Instructor
@@ -151,11 +150,10 @@ const getNavItems = (userRole: string = '') => {
         label: "Excuse Application", 
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
-      },
-      { icon: Brain, label: "Signature AI", href: "/signature-ai" }
+      }
     ];
   } else if (userRole === 'SSG officer') {
-    // SSG Officer - no subject
+    // SSG Officer - no subject and no Signature AI
     return [
       { icon: LayoutDashboard, label: "Dashboard", href: "/" },
       { 
@@ -177,11 +175,10 @@ const getNavItems = (userRole: string = '') => {
         label: "Excuse Application", 
         href: "/excuse-application",
         isActive: (path: string) => path === '/excuse-application'
-      },
-      { icon: Brain, label: "Signature AI", href: "/signature-ai" }
+      }
     ];
   } else if (userRole === 'ROTC officer') {
-    // ROTC Officer - only Take Attendance, Profile, Log Out
+    // ROTC Officer - only Take Attendance
     return [
       { 
         icon: UserCheck, 
