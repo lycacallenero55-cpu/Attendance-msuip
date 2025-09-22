@@ -15,6 +15,11 @@ import json
 import pickle
 
 logger = logging.getLogger(__name__)
+try:
+    # Shared tf.data preprocessing and augmentation utilities
+    from utils.tfdata import make_tfdata_from_numpy
+except Exception:
+    make_tfdata_from_numpy = None  # Fallback handled during training
 
 class GlobalSignatureClassifier:
     """
@@ -185,10 +190,14 @@ class GlobalSignatureClassifier:
         self.create_global_model()
         
         # Compile model
+        metrics = [
+            'accuracy',
+            keras.metrics.TopKCategoricalAccuracy(k=3, name='top3_accuracy')
+        ]
         self.global_model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=self.learning_rate),
             loss='categorical_crossentropy',
-            metrics=['accuracy', 'top_3_accuracy']
+            metrics=metrics
         )
         
         # Callbacks
@@ -202,15 +211,56 @@ class GlobalSignatureClassifier:
             )
         ]
         
-        # Train model
-        history = self.global_model.fit(
-            X, y,
-            epochs=epochs,
-            validation_split=validation_split,
-            batch_size=32,
-            callbacks=callbacks,
-            verbose=1
-        )
+        # Build tf.data pipelines with on-the-fly augmentation for training
+        num_samples = X.shape[0]
+        val_size = max(1, int(num_samples * float(validation_split)))
+        train_size = num_samples - val_size
+        
+        # Shuffle before split for better class balance
+        indices = np.arange(num_samples)
+        np.random.shuffle(indices)
+        X = X[indices]
+        y = y[indices]
+        
+        X_train, y_train = X[:train_size], y[:train_size]
+        X_val, y_val = X[train_size:], y[train_size:]
+        
+        if make_tfdata_from_numpy is not None:
+            ds_train = make_tfdata_from_numpy(
+                tf.convert_to_tensor(X_train),
+                tf.convert_to_tensor(y_train),
+                image_size=self.image_size,
+                batch_size=min(32, max(4, train_size // 8)) if train_size > 0 else 8,
+                shuffle=True,
+                augment=True,
+                cache=True,
+            )
+            ds_val = make_tfdata_from_numpy(
+                tf.convert_to_tensor(X_val),
+                tf.convert_to_tensor(y_val),
+                image_size=self.image_size,
+                batch_size=min(32, max(4, val_size // 8)) if val_size > 0 else 8,
+                shuffle=False,
+                augment=False,
+                cache=True,
+            )
+            history = self.global_model.fit(
+                ds_train,
+                validation_data=ds_val,
+                epochs=epochs,
+                callbacks=callbacks,
+                verbose=1,
+            )
+        else:
+            # Fallback: direct arrays without augmentation
+            history = self.global_model.fit(
+                X, y,
+                epochs=epochs,
+                validation_split=validation_split,
+                batch_size=32,
+                callbacks=callbacks,
+                verbose=1
+            )
         
         self.training_history = history.history
         logger.info("Global model training completed")
@@ -260,6 +310,18 @@ class GlobalSignatureClassifier:
         logger.info("Incremental training completed")
         return history.history
     
+    def _preprocess_for_inference(self, image: np.ndarray) -> np.ndarray:
+        """Resize to model input and scale to [0,1] consistently with training."""
+        if image.ndim == 2:
+            image = np.stack([image, image, image], axis=-1)
+        elif image.shape[-1] == 4:
+            image = image[..., :3]
+        img = tf.image.resize(tf.convert_to_tensor(image), [self.image_size, self.image_size])
+        img = tf.cast(img, tf.float32)
+        if tf.reduce_max(img) > 1.0:
+            img = img / 255.0
+        return img.numpy()
+
     def predict_student(self, image: np.ndarray, confidence_threshold: float = 0.7) -> Tuple[Optional[str], float]:
         """
         Predict which student owns the signature
@@ -268,9 +330,12 @@ class GlobalSignatureClassifier:
         if self.global_model is None:
             raise ValueError("Model not trained yet")
         
-        # Preprocess image
-        if len(image.shape) == 3:
+        # Preprocess image consistently with training
+        if image.ndim == 3:
+            image = self._preprocess_for_inference(image)
             image = np.expand_dims(image, 0)
+        elif image.ndim == 4:
+            image = np.stack([self._preprocess_for_inference(img) for img in image], axis=0)
         
         # Get predictions
         predictions = self.global_model.predict(image, verbose=0)
