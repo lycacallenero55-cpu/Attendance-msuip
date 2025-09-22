@@ -25,16 +25,13 @@ def _derive_s3_key_from_url(url: str) -> str | None:
 @router.post("/signature")
 async def upload_signature(
     student_id: int = Form(...),
-    label: str = Form(...),  # 'genuine' only for owner identification
     file: UploadFile = File(...),
 ):
-    if label not in ("genuine",):
-        raise HTTPException(status_code=400, detail="label must be 'genuine' for owner identification")
     data = await file.read()
     try:
-        key, url = upload_bytes(student_id, label, file.filename or "signature.png", data, file.content_type)
+        key, url = upload_bytes(student_id, "genuine", file.filename or "signature.png", data, file.content_type)
         # Always store the signature - no duplicate prevention
-        record = await db_manager.add_student_signature(student_id, label, key, url)
+        record = await db_manager.add_student_signature(student_id, "genuine", key, url)
         return {"success": True, "record": record}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
@@ -59,14 +56,11 @@ async def list_signatures(student_id: int):
 @router.post("/presign")
 async def presign_upload(
     student_id: int = Form(...),
-    label: str = Form(...),
     filename: str = Form(...),
     content_type: Optional[str] = Form(None),
 ):
-    if label not in ("genuine",):
-        raise HTTPException(status_code=400, detail="label must be 'genuine' for owner identification")
     try:
-        post = create_presigned_post(student_id, label, filename, content_type)
+        post = create_presigned_post(student_id, "genuine", filename, content_type)
         return {"success": True, **post}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Presign failed: {str(e)}")
@@ -115,26 +109,51 @@ async def delete_signature(record_id: int, s3_key: Optional[str] = None):
 async def students_with_images(summary: bool = False):
     try:
         if summary:
-            # Trust S3 as the source of truth: count objects under {student_id}/genuine
+            # FAST PATH: aggregate counts directly from DB in a single request
+            # This avoids slow per-student S3 listings and returns instantly
             summarized = []
             try:
-                # List candidate student IDs from DB quickly, then verify counts from S3
-                resp = db_manager.client.table("student_signatures").select("student_id").execute()
+                # Fetch minimal columns and aggregate in-memory
+                resp = db_manager.client.table("student_signatures").select("student_id,label").execute()
                 rows = resp.data or []
-                seen = set()
+                counts: dict[int, dict[str, int]] = {}
                 for r in rows:
                     sid = r.get("student_id")
-                    if sid is None or sid in seen:
+                    if sid is None:
                         continue
-                    seen.add(sid)
-                    g = count_student_signatures(int(sid))
-                    if g > 0:
+                    lab = (r.get("label") or "").lower()
+                    bucket = counts.setdefault(int(sid), {"genuine_count": 0})
+                    if lab == "genuine":
+                        bucket["genuine_count"] += 1
+                    
+                # Build summarized list (only include students with any images)
+                for sid, c in counts.items():
+                    total = int(c.get("genuine_count", 0))
+                    if total > 0:
                         summarized.append({
                             "student_id": int(sid),
-                            "genuine_count": int(g),
+                            "genuine_count": int(c.get("genuine_count", 0)),
                         })
             except Exception:
+                # Fallback to S3 counting only if DB aggregation fails
                 summarized = []
+                try:
+                    resp = db_manager.client.table("student_signatures").select("student_id").execute()
+                    rows = resp.data or []
+                    seen = set()
+                    for r in rows:
+                        sid = r.get("student_id")
+                        if sid is None or sid in seen:
+                            continue
+                        seen.add(sid)
+                        g, f = count_student_signatures(int(sid))
+                        if (g + f) > 0:
+                            summarized.append({
+                                "student_id": int(sid),
+                                "genuine_count": int(g),
+                            })
+                except Exception:
+                    summarized = []
             return {"items": summarized}
         # Non-summary: original detailed validation path
         items = await db_manager.list_students_with_images()
@@ -150,5 +169,3 @@ async def students_with_images(summary: bool = False):
         return {"items": items}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"List students failed: {str(e)}")
-
-

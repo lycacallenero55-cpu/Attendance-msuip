@@ -221,10 +221,6 @@ const DesktopNavigation = () => {
   const isInitialMount = useRef(true);
     const navItems = getNavItems(userRole);
   
-  // Debug logging
-  console.log('Desktop Navigation - Current userRole:', userRole);
-  console.log('Desktop Navigation - Generated navItems:', navItems);
-  
   useEffect(() => {
     const fetchRole = async () => {
       // If we have cached role for the same user, don't refetch
@@ -416,10 +412,6 @@ const MobileDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const [isAnimating, setIsAnimating] = useState(false);
   const isInitialMount = useRef(true);
     const navItems = getNavItems(userRole);
-  
-  // Debug logging
-  console.log('MobileDrawer - Current userRole:', userRole);
-  console.log('MobileDrawer - Generated navItems:', navItems);
   
   // Handle animation states
   useEffect(() => {

@@ -43,7 +43,7 @@ def _resolve_public_base_url() -> str:
 
 def make_key(student_id: int | str, label: str, filename: str) -> str:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "png"
-    # Only genuine signatures are used for owner identification
+    # Force only genuine path usage; forged is deprecated
     safe_label = "genuine"
     return f"{student_id}/{safe_label}/{uuid.uuid4().hex}.{ext}"
 
@@ -205,9 +205,9 @@ def count_objects_with_prefix(prefix: str) -> int:
     return total
 
 
-def count_student_signatures(student_id: int | str) -> int:
-    """Return genuine_count from S3 by listing prefixes."""
+def count_student_signatures(student_id: int | str) -> tuple[int, int]:
+    """Return (genuine_count, forged_count) from S3 by listing prefixes. Forged count is deprecated (always 0)."""
     sid = str(student_id)
     genuine = count_objects_with_prefix(f"{sid}/genuine/")
-    return genuine
-
+    forged = 0
+    return genuine, forged

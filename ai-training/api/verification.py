@@ -146,6 +146,7 @@ def _get_fallback_response(endpoint_type="identify", student_id=None, error_mess
         "score": 0.0,
         "global_score": None,
         "student_confidence": 0.0,
+        "authenticity_score": 0.0,
         "predicted_student": {
             "id": 0,
             "name": "System Unavailable"
@@ -657,6 +658,19 @@ async def identify_signature_owner(
                         "top_k": [{"student_id": int(best_sid), "name": student_name, "prob": float(best_score)}],
                         "status": "ok"
                     }
+                    # Apply similarity threshold for Not recognized
+                    from config import settings as _settings
+                    threshold = float(getattr(_settings, 'DEFAULT_SIMILARITY_THRESHOLD', 0.7))
+                    if best_score < threshold:
+                        return {
+                            "success": True,
+                            "match": False,
+                            "predicted_student_id": None,
+                            "predicted_student": None,
+                            "score": float(best_score),
+                            "decision": "no_match",
+                            "message": "Not recognized"
+                        }
                 else:
                     return {
                         "predicted_student": {"id": 0, "name": "Unknown"},
@@ -1201,6 +1215,18 @@ async def identify_signature_owner(
                         elif score01 > second_best:
                             second_best = score01
                             second_cos = cosine
+                    from config import settings as _settings2
+                    threshold2 = float(getattr(_settings2, 'DEFAULT_SIMILARITY_THRESHOLD', 0.7))
+                    if best_score < threshold2:
+                        return {
+                            "success": True,
+                            "match": False,
+                            "predicted_student_id": None,
+                            "predicted_student": None,
+                            "score": float(best_score),
+                            "decision": "no_match",
+                            "message": "Not recognized"
+                        }
                 if best_sid is not None:
                     predicted_owner_id = int(best_sid)
                     hybrid["global_score"] = float(best_score)
@@ -1691,6 +1717,8 @@ async def verify_signature(
                                     request_model_manager.embedding_model = model
                                 elif model_type == 'classification':
                                     request_model_manager.classification_head = model
+                                elif model_type == 'authenticity':
+                                    request_model_manager.authenticity_head = model
                                 elif model_type == 'siamese':
                                     request_model_manager.siamese_model = model
                                     

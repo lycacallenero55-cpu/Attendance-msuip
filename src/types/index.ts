@@ -195,8 +195,12 @@ export interface StudentTrainingCard {
   id: string;
   student: Student | null;
   genuineFiles: TrainingFile[];
+  // forgedFiles removed; owner identification only
+  // forgedFiles: TrainingFile[];
   isExpanded: boolean;
   genuineCount?: number;
+  // forgedCount removed; owner identification only
+  // forgedCount?: number;
   isFetchingImages?: boolean;
 }
 

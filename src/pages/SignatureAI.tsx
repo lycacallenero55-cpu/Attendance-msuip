@@ -31,7 +31,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import aiService from '@/lib/aiService';
+import { aiService, AI_CONFIG } from '@/lib/aiService';
 import { fetchStudents } from '@/lib/supabaseService';
 import type { Student, StudentTrainingCard as StudentTrainingCardType, TrainingFile } from '@/types';
 import { Progress } from '@/components/ui/progress';
@@ -91,7 +91,7 @@ const SignatureAI = () => {
   const [trainingStage, setTrainingStage] = useState<'idle' | 'preprocessing' | 'training' | 'validation' | 'completed' | 'error'>('idle');
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>('');
   const [jobId, setJobId] = useState<string | null>(null);
-  const eventSourceRef = useRef<{ close: () => void } | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const trainingStartTimeRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   
@@ -114,14 +114,13 @@ const SignatureAI = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{
     success: boolean;
-    student_id?: string;
-    student_name?: string;
-    confidence?: number;
+    match: boolean;
+    score: number;
     message?: string;
-    error?: string;
-    match?: boolean;
-    score?: number;
+    predicted_student_id?: number | null;
     predicted_student?: {
+      id: number;
+      student_id: string;
       firstname: string;
       surname: string;
     };
@@ -151,6 +150,8 @@ const SignatureAI = () => {
   const [isStudentFormDialogOpen, setIsStudentFormDialogOpen] = useState(false);
   const [currentFormCardId, setCurrentFormCardId] = useState<string | null>(null);
   // Removed trainingImagesSet - only genuine images for owner identification
+  // Active image set for training preview (owner identification only)
+  const [trainingImagesSet, setTrainingImagesSet] = useState<'genuine'>('genuine');
   
   // Toggle between Student Cards and Trained Models view
   const [isViewingModels, setIsViewingModels] = useState(false);
@@ -400,7 +401,7 @@ const SignatureAI = () => {
 
   const getTotalTrainingData = () => {
     return studentCards.reduce((acc, card) => ({
-      genuine: acc.genuine + card.genuineFiles.length
+      genuine: acc.genuine + (card.genuineFiles?.length || 0)
     }), { genuine: 0 });
   };
 
@@ -453,10 +454,12 @@ const SignatureAI = () => {
           if (card.id !== cardId) return card;
           // Revoke previews to avoid memory leaks
           card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
+          // Skip forged files cleanup - owner identification only
           return {
             ...card,
             student: null,
             genuineFiles: [],
+            // Removed forgedFiles - owner identification only
           };
         });
       }
@@ -464,6 +467,7 @@ const SignatureAI = () => {
       const card = prev.find(c => c.id === cardId);
       if (card) {
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
+        // Skip forged files cleanup - owner identification only
       }
       
       return prev.filter(c => c.id !== cardId);
@@ -493,9 +497,11 @@ const SignatureAI = () => {
       const card = studentCards.find(c => c.id === currentCardId);
       if (card && hasUploadedImages(card) && card.student && card.student.id !== student.id) {
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
+        // Skip forged files cleanup - owner identification only
         updateStudentCard(currentCardId, {
           student,
           genuineFiles: [],
+          
         });
         toast({
           title: "Student Changed",
@@ -510,6 +516,7 @@ const SignatureAI = () => {
             const toPreview = (rec: { id:number; s3_url:string; s3_key:string; label:'genuine' }) => ({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: rec.label } as TrainingFile);
             updateStudentCard(currentCardId, {
               genuineFiles: persisted.filter(x => x.label === 'genuine').map(x => toPreview(x)),
+              // Removed forgedFiles - owner identification only
             });
           } catch (e) {
             // ignore
@@ -541,6 +548,7 @@ const SignatureAI = () => {
   const openStudentFormDialog = (cardId: string) => {
     setCurrentFormCardId(cardId);
     setIsStudentFormDialogOpen(true);
+    setTrainingImagesSet('genuine');
   };
 
   // Training Functions
@@ -580,7 +588,7 @@ const SignatureAI = () => {
     for (const file of safeFiles) {
       try {
         const rec = await aiService.uploadSignature(card.student.id, setType, file);
-        uploaded.push({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: 'genuine' });
+        uploaded.push({ file: new File([], rec.s3_url), preview: rec.s3_url, id: rec.id, s3Key: rec.s3_key, label: rec.label });
       } catch (e: any) {
         // fallback to local preview if upload fails
         try {
@@ -600,6 +608,7 @@ const SignatureAI = () => {
         if (setType === 'genuine') {
           return { ...card, genuineFiles: [...card.genuineFiles, ...uploaded] };
         }
+        return card;
       }
       return card;
     }));
@@ -634,6 +643,7 @@ const SignatureAI = () => {
       if (card.id === cardId) {
         // Revoke all object URLs to prevent memory leaks
         card.genuineFiles.forEach(file => URL.revokeObjectURL(file.preview));
+        
         return { ...card, genuineFiles: [] };
       }
       return card;
@@ -672,23 +682,31 @@ const SignatureAI = () => {
       const studentIds: string[] = [];
       
       studentCards.forEach(card => {
-        if (card.student && (card.genuineCount ?? card.genuineFiles.length) > 0) {
+        if (card.student && ((card.genuineCount ?? card.genuineFiles.length) > 0)) {
           studentIds.push(card.student.student_id);
-          allGenuineFiles.push(...card.genuineFiles.filter(f => !f.placeholder).map(f => f.file));
+          allGenuineFiles.push(
+            ...card.genuineFiles
+              .filter(f => !f.placeholder && f.file && (f.file.size || 0) > 0)
+              .map(f => f.file)
+          );
         }
       });
 
+      // expose s3 flag globally for aiService to read for CPU path
+      ;(window as any).__USE_S3_UPLOAD__ = useS3Upload;
       const asyncResponse = useGPU
         ? await aiService.startGPUTraining(
             studentIds.join(','),
             allGenuineFiles,
+            [],
             true,
             useS3Upload
           )
         : await aiService.startAsyncTraining(
             studentIds.join(','),
             allGenuineFiles,
-            'global'
+            [],
+            'hybrid'
           );
       
       setJobId(asyncResponse.job_id);
@@ -774,6 +792,15 @@ const SignatureAI = () => {
             eventSourceRef.current = null;
             setIsTraining(false);
           }
+        },
+        (error) => {
+          console.error('Training progress error:', error);
+          setTrainingStage('error');
+          setTrainingStatus('Connection error');
+          toast({ title: "Connection Error", description: "Lost connection to training progress updates", variant: "destructive" });
+          eventSource.close();
+          eventSourceRef.current = null;
+          setIsTraining(false);
         }
       );
       eventSourceRef.current = eventSource;
@@ -859,7 +886,9 @@ const SignatureAI = () => {
             
             const stream = video.srcObject as MediaStream;
             stream?.getTracks().forEach(track => track.stop());
-            // Note: Auto-verify removed to avoid timing issues
+            setTimeout(() => {
+              handleVerifySignature();
+            }, 0);
           }
         });
       }
@@ -948,10 +977,13 @@ const SignatureAI = () => {
         if (idx !== -1) removeTrainingFile(idx, 'genuine', modalContext.cardId);
         const updated = card.genuineFiles.filter(f => f.preview !== targetPreview).map(f => f.preview);
         setModalImages(updated);
+      } else {
+        // Skip forged files - owner identification only
+        setModalImages(updated);
       }
-      setModalImageIndex(prev => Math.max(0, prev - (modalImages.length === 1 ? 0 : 1)));
-      if (modalImages.length <= 1) closeImageModal();
     }
+    setModalImageIndex(prev => Math.max(0, prev - (modalImages.length === 1 ? 0 : 1)));
+    if (modalImages.length <= 1) closeImageModal();
   };
 
   const handleVerifySignature = async () => {
@@ -974,8 +1006,8 @@ const SignatureAI = () => {
       if (result.success) {
         toast({
           title: "Verification Complete",
-          description: result.student_id
-            ? "Match found"
+          description: result.match 
+            ? "Match found" 
             : "No match found",
         });
       } else {
@@ -997,38 +1029,6 @@ const SignatureAI = () => {
     }
   };
 
-  const isInitialized = studentCards && allStudents;
-
-  useEffect(() => {
-    console.log('Component fully mounted with state:', {
-      isInitialized,
-      students: safeAllStudents.length,
-      cards: safeStudentCards.length,
-      training: isTraining,
-      models: trainedModels.length
-    });
-
-    // Test error boundary in development
-    if (process.env.NODE_ENV === 'development') {
-      // Uncomment to test error boundary
-      // throw new Error('Testing error boundary');
-    }
-  }, [isInitialized]);
-
-  if (!isInitialized) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-screen">
-          <Loader2 className="w-8 h-8 animate-spin" />
-          <span className="ml-2">Initializing signature recognition...</span>
-        </div>
-      </Layout>
-    );
-  }
-
-  const safeStudentCards = studentCards || [];
-  const safeAllStudents = allStudents || [];
-
   return (
     <Layout>
       <div
@@ -1038,7 +1038,7 @@ const SignatureAI = () => {
       >
         {/* Page Header */}
         <div className="space-y-0.5">
-          <h1 className="text-lg font-bold text-education-navy">MODEL TRAINING & VERIFICATION</h1>
+          <h1 className="text-lg font-bold text-education-navy">SIGNATURE AI TRAINING & VERIFICATION</h1>
           <p className="text-sm text-muted-foreground">
             Train AI models for multiple students and verify signatures using machine learning
           </p>
@@ -1071,8 +1071,8 @@ const SignatureAI = () => {
                       <DropdownMenuItem disabled={isLocked} onClick={async () => {
                         if (isLocked) return;
                         try {
-                          const items = await aiService.listStudentsWithImages();
-                          const byId = new Map(safeAllStudents.map(s => [s.id, s]));
+                          const items = await aiService.listStudentsWithImages(true);
+                          const byId = new Map(allStudents.map(s => [s.id, s]));
                           
                           // Filter out students with missing S3 images and validate counts
                           const validItems = [];
@@ -1080,12 +1080,12 @@ const SignatureAI = () => {
                             if (item.student_id && byId.has(item.student_id)) {
                               const student = byId.get(item.student_id);
                               const genuineCount = item.genuine_count || 0;
-                              
                               // Only include students with actual images (not just DB records)
                               if (student && genuineCount > 0) {
                                 validItems.push({
                                   student: student,
-                                  genuine_count: genuineCount
+                                  genuine_count: genuineCount,
+                                  // forged_count removed
                                 });
                               }
                             }
@@ -1103,23 +1103,26 @@ const SignatureAI = () => {
                           // Add cards for these students with immediate display
                           let addedIds: number[] = [];
                           setStudentCards(prev => {
-                            const existingIds = new Set(prev.filter(c => c.student).map(c => (c.student as Student).id));
+                            const existingIds = new Set(prev.filter(c => c.student).map(c => (c.student as any).id));
                             const newCards = validItems
                               .filter(x => !existingIds.has(x.student.id))
                               .map(x => ({ 
                                 id: `${Date.now()}-${x.student.id}`, 
-                                student: x.student,
+                                student: x.student, 
+                                genuineFiles: [], 
+          
                                 isExpanded: true, 
                                 genuineCount: x.genuine_count,
                                 // Add placeholder files to show loading state
                                 genuineFiles: Array(x.genuine_count).fill(null).map((_, i) => ({
-                                  file: new File([], 'placeholder-' + i),
+                                  file: new File([], `placeholder-${i}`),
                                   preview: '',
                                   placeholder: true,
                                   label: 'genuine' as const
                                 })),
+            
                               }));
-                            addedIds = newCards.map(c => (c.student as Student).id);
+                            addedIds = newCards.map(c => (c.student as any).id);
                             const merged = [...prev, ...newCards];
                             // Remove placeholder empty card if real students exist
                             const hasReal = merged.some(c => !!c.student);
@@ -1143,6 +1146,8 @@ const SignatureAI = () => {
                                   s3Key: s.s3_key,
                                   label: s.label as 'genuine'
                                 }));
+                                
+                              
                               // Update the card with actual images
                               setStudentCards(prev => prev.map(card => 
                                 card.student?.id === item.student.id 
@@ -1161,7 +1166,9 @@ const SignatureAI = () => {
                                   ? { 
                                       ...card, 
                                       genuineFiles: [],
+                                      
                                       genuineCount: 0,
+                                      
                                     }
                                   : card
                               ));
@@ -1226,7 +1233,7 @@ const SignatureAI = () => {
             <div className={`grid ${isViewingModels ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-6'} gap-2 min-h-[424px] max-h-[424px] overflow-auto pr-1 content-start justify-start auto-rows-[40px] items-start`}>
               {!isViewingModels ? (
                 <>
-                  {safeStudentCards.map((card, index) => (
+                  {studentCards.map((card, index) => (
                     <div key={card.id}>
                       <StudentTrainingCard
                         card={card}
@@ -1513,8 +1520,7 @@ const SignatureAI = () => {
                 )}
                 
                 <div className="text-center text-sm text-muted-foreground">
-                  {safeStudentCards.filter(c => c.student).length} students • {getTotalTrainingData().genuine} samples ready
-                  {/* Owner identification only */}
+                  {studentCards.filter(c => c.student).length} students • {getTotalTrainingData().genuine} samples ready
                 </div>
               </div>
             </div>
@@ -1882,7 +1888,7 @@ const SignatureAI = () => {
                     onClick={() => {
                       if (studentSelectMode === 'bulkAdd') {
                         if (selectedStudentIds.size === 0) return setIsStudentDialogOpen(false);
-                        const selected = safeAllStudents.filter(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
+                        const selected = allStudents.filter(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
                         setStudentCards(prev => {
                           let base = prev;
                           if (
@@ -1899,7 +1905,7 @@ const SignatureAI = () => {
                         });
                         setIsStudentDialogOpen(false);
                       } else {
-                        const chosen = safeAllStudents.find(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
+                        const chosen = allStudents.find(s => selectedStudentIds.has(s.id) && !selectedElsewhereIds.has(s.id));
                         if (chosen && currentCardId) {
                           handleStudentSelection(chosen);
                           setIsStudentDialogOpen(false);
@@ -1924,7 +1930,7 @@ const SignatureAI = () => {
             </DialogHeader>
             <div className="flex flex-col gap-0 h-full">
               {currentFormCardId && (() => {
-                const card = safeStudentCards.find(c => c.id === currentFormCardId);
+                const card = studentCards.find(c => c.id === currentFormCardId);
                 if (!card) return null;
                 
                 return (
@@ -1974,25 +1980,37 @@ const SignatureAI = () => {
 
                     {/* Upload Buttons - Original Layout */}
                     {card.student && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="flex items-center gap-2 w-fit mt-2"
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*';
-                          input.multiple = true;
-                          input.onchange = (e) => {
-                            const files = Array.from((e.target as HTMLInputElement).files || []);
-                            handleTrainingFilesChange(files, 'genuine', card.id);
-                          };
-                          input.click();
-                        }}
-                      >
-                        <Upload className="w-4 h-4" />
-                        Genuine
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-2 hover:bg-transparent hover:text-foreground opacity-50 cursor-not-allowed"
+                          disabled={true}
+                          title="Forgery detection is disabled - focus on owner identification only"
+                        >
+                          <Upload className="w-4 h-4" />
+                          
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="flex items-center gap-2"
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.multiple = true;
+                            input.onchange = (e) => {
+                              const files = Array.from((e.target as HTMLInputElement).files || []);
+                              handleTrainingFilesChange(files, 'genuine', card.id);
+                            };
+                            input.click();
+                          }}
+                        >
+                          <Upload className="w-4 h-4" />
+                          Genuine
+                        </Button>
+                      </div>
                     )}
 
                     {/* Training Images Preview - Expands to fill space with compact grid and toggles */}
@@ -2037,16 +2055,16 @@ const SignatureAI = () => {
                                         const parent = target.parentElement;
                                         if (parent) {
                                           parent.innerHTML = '<div class="absolute inset-0 w-full h-full flex items-center justify-center bg-red-100 text-[10px] text-red-600 text-center p-1">Image not found</div>';
-                                         }
-                                       }}
-                                     />
+                                        }
+                                      }}
+                                    />
                                   )}
                                   <button
                                     type="button"
                                     className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded p-1 opacity-0 group-hover/itm:opacity-100 transition-opacity"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      removeTrainingFile(index, 'genuine', card.id);
+                                      removeTrainingFile(index, trainingImagesSet, card.id);
                                     }}
                                     aria-label="Delete image"
                                   >
@@ -2064,19 +2082,21 @@ const SignatureAI = () => {
                           {/* Chevron controls on hover to toggle between sets */}
                           <button
                             className="hidden group-hover:flex absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 items-center justify-center opacity-50 cursor-not-allowed"
+                            onClick={() => setTrainingImagesSet('genuine')}
                             aria-label="Previous"
                             type="button"
                             disabled={true}
-                            title="Owner identification mode - only genuine signatures"
+                            title="Forgery detection disabled - only genuine signatures allowed"
                           >
                             <ChevronLeft className="w-4 h-4" />
                           </button>
                           <button
                             className="hidden group-hover:flex absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 items-center justify-center opacity-50 cursor-not-allowed"
+                            onClick={() => setTrainingImagesSet('genuine')}
                             aria-label="Next"
                             type="button"
                             disabled={true}
-                            title="Owner identification mode - only genuine signatures"
+                            title="Forgery detection disabled - only genuine signatures allowed"
                           >
                             <ChevronRight className="w-4 h-4" />
                           </button>

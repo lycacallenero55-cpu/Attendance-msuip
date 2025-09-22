@@ -78,8 +78,8 @@ const StudentTrainingCard: React.FC<StudentTrainingCardProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs mr-1">
-            <span className="text-blue-600 font-medium">{card.genuineCount ?? card.genuineFiles.length}</span>
-            {card.genuineFiles.some(f => f.placeholder) && (
+            <span className="text-green-600 font-medium">{card.genuineCount ?? card.genuineFiles.length}</span>
+            {(card.genuineFiles.some(f => f.placeholder)) && (
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" title="Loading images..." />
             )}
           </div>

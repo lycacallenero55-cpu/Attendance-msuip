@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 class Settings:
@@ -12,41 +11,89 @@ class Settings:
     # AWS / S3 Configuration
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-    AWS_REGION = os.getenv("AWS_REGION")
+    AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
     S3_BUCKET = os.getenv("S3_BUCKET")
-    S3_PUBLIC_BASE_URL = os.getenv("S3_PUBLIC_BASE_URL")
-    S3_USE_PRESIGNED_GET = os.getenv("S3_USE_PRESIGNED_GET", "true").lower() == "true"
-    
-    # GPU Training Configuration
-    AWS_KEY_NAME = os.getenv("AWS_KEY_NAME")
-    AWS_SECURITY_GROUP_ID = os.getenv("AWS_SECURITY_GROUP_ID")
-    AWS_SUBNET_ID = os.getenv("AWS_SUBNET_ID")
-    AWS_GPU_EXISTING_INSTANCE_ID = os.getenv("AWS_GPU_EXISTING_INSTANCE_ID")
-    MAX_CONCURRENT_GPU_INSTANCES = int(os.getenv("MAX_CONCURRENT_GPU_INSTANCES", "1"))
-    AWS_GPU_AMI_ID = os.getenv("AWS_GPU_AMI_ID")
-    AWS_GPU_GITHUB_REPO = os.getenv("AWS_GPU_GITHUB_REPO")
-    AWS_IAM_INSTANCE_PROFILE = os.getenv("AWS_IAM_INSTANCE_PROFILE")
-    AWS_GPU_INSTANCE_TYPE = os.getenv("AWS_GPU_INSTANCE_TYPE")
-    USE_LOCAL_STORAGE = os.getenv("USE_LOCAL_STORAGE", "false").lower() == "true"
+    # If your bucket is public, this will be the base for URLs; otherwise presign GETs
+    S3_PUBLIC_BASE_URL = os.getenv("S3_PUBLIC_BASE_URL", None)
+    S3_USE_PRESIGNED_GET = os.getenv("S3_USE_PRESIGNED_GET", "false").lower() == "true"
     
     # Server Configuration
     HOST = os.getenv("HOST", "0.0.0.0")
-    PORT = int(os.getenv("PORT", "8000"))
-    DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+    PORT = int(os.getenv("PORT", 8000))
+    DEBUG = os.getenv("DEBUG", "True").lower() == "true"
     
     # Model Configuration
-    MODEL_IMAGE_SIZE = int(os.getenv("MODEL_IMAGE_SIZE", "224"))
-    MODEL_BATCH_SIZE = int(os.getenv("MODEL_BATCH_SIZE", "32"))
-    MODEL_EPOCHS = int(os.getenv("MODEL_EPOCHS", "50"))
-    MODEL_LEARNING_RATE = float(os.getenv("MODEL_LEARNING_RATE", "0.001"))
+    MODEL_IMAGE_SIZE: int = int(os.getenv("MODEL_IMAGE_SIZE", 224))
+    MODEL_BATCH_SIZE: int = int(os.getenv("MODEL_BATCH_SIZE", 16))  # Smaller batch size for small datasets
+    MODEL_EPOCHS: int = int(os.getenv("MODEL_EPOCHS", 50))  # More epochs for better convergence with small datasets
+    MODEL_LEARNING_RATE: float = float(os.getenv("MODEL_LEARNING_RATE", 0.0001))  # Lower learning rate for transfer learning
+    MODEL_FINE_TUNE_EPOCHS: int = int(os.getenv("MODEL_FINE_TUNE_EPOCHS", 10))  # Additional epochs for fine-tuning
+
+    # CPU Optimization
+    USE_CPU_OPTIMIZATION: bool = True
+    CPU_THREADS: int = 6  # For Ryzen 5 3400G
     
     # Storage Configuration
-    LOCAL_MODELS_DIR = os.getenv("LOCAL_MODELS_DIR", "./models")
+    LOCAL_MODELS_DIR: str = os.getenv("LOCAL_MODELS_DIR", "./models")
+    SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "models")
+    
+    # GPU Training Paths
+    GPU_TRAINING_DIR = os.getenv("GPU_TRAINING_DIR", "/home/ubuntu/ai-training")
+    GPU_LOGS_DIR = os.getenv("GPU_LOGS_DIR", "/var/log/ai-training")
+    GPU_TEMP_DIR = os.getenv("GPU_TEMP_DIR", "/tmp")
+    
+    # S3 Paths
+    S3_TRAINING_DATA_PREFIX = os.getenv("S3_TRAINING_DATA_PREFIX", "training_data")
+    S3_MODELS_PREFIX = os.getenv("S3_MODELS_PREFIX", "models")
+    S3_RESULTS_PREFIX = os.getenv("S3_RESULTS_PREFIX", "training_results")
+    S3_SCRIPTS_PREFIX = os.getenv("S3_SCRIPTS_PREFIX", "scripts")
     
     # Training Configuration
-    MIN_GENUINE_SAMPLES = int(os.getenv("MIN_GENUINE_SAMPLES", "10"))
-    MIN_FORGED_SAMPLES = int(os.getenv("MIN_FORGED_SAMPLES", "5"))
-    MAX_TRAINING_TIME = int(os.getenv("MAX_TRAINING_TIME", "3600"))
+    MIN_GENUINE_SAMPLES: int = int(os.getenv("MIN_GENUINE_SAMPLES", 3))  # Reduced for minimal requirements like Teachable Machine
+    
+    MAX_TRAINING_TIME: int = int(os.getenv("MAX_TRAINING_TIME", 3600))
 
-# Create a global settings instance
+    # Verification Settings
+    DEFAULT_SIMILARITY_THRESHOLD: float = 0.7
+    USE_ADAPTIVE_THRESHOLD: bool = False
+    
+    # Confidence Thresholds for Owner Detection
+    CONFIDENCE_THRESHOLD: float = 0.6  # Minimum confidence for positive match
+    ENABLE_FORGERY_DETECTION: bool = False
+    
+    # Anti-Spoofing (disabled to prioritize identification flow)
+    ENABLE_ANTISPOOFING: bool = False
+    SPOOFING_THRESHOLD: float = 0.6
+    
+    # Training Configuration - Focus on Owner Identification Only
+   
+    ENABLE_FORGERY_TRAINING: bool = False
+    
+    # Model Versioning
+    ENABLE_MODEL_VERSIONING: bool = True
+    MAX_MODEL_VERSIONS: int = 5
+    
+    # Performance Monitoring
+    ENABLE_PERFORMANCE_MONITORING: bool = True
+    LOG_LEVEL: str = "INFO"
+    
+    # EC2 GPU Training Configuration (using your existing env variables)
+    GPU_INSTANCE_TYPE: str = os.getenv("AWS_GPU_INSTANCE_TYPE", "g4dn.xlarge")
+    GPU_AMI_ID: str = os.getenv("AWS_GPU_AMI_ID", "ami-0bbdd8c17ed981ef9")
+    EC2_KEY_NAME: str = os.getenv("AWS_KEY_NAME", "gpu-training-key")
+    EC2_SECURITY_GROUP_ID: str = os.getenv("AWS_SECURITY_GROUP_ID", "sg-0b99dfa9c4107a3b8")
+    EC2_SUBNET_ID: str = os.getenv("AWS_SUBNET_ID", "subnet-021ae1656852b0225")
+    EC2_IAM_INSTANCE_PROFILE: str = os.getenv("AWS_IAM_INSTANCE_PROFILE", "EC2-S3-Access")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", S3_BUCKET)
+    EXISTING_GPU_INSTANCE_ID: str = os.getenv("AWS_GPU_EXISTING_INSTANCE_ID", "i-0756716b845e4c314")
+    SKIP_GPU_SETUP: bool = True  # Always skip setup since you have existing instance
+    
+    class Config:
+        env_file = ".env"
+
 settings = Settings()
+
+# Initialize CPU optimization on import
+if settings.USE_CPU_OPTIMIZATION:
+    from utils.cpu_optimization import configure_tensorflow_for_cpu
+    configure_tensorflow_for_cpu()

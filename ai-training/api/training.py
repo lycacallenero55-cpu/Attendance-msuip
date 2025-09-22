@@ -25,11 +25,13 @@ from models.signature_embedding_model import SignatureEmbeddingModel
 from utils.signature_preprocessing import SignaturePreprocessor, SignatureAugmentation
 # Removed unused Supabase imports - using S3 directly
 from utils.s3_storage import upload_model_file
-# Removed missing modules - using existing s3_storage functionality
+# Removed optional S3 saving helpers to avoid missing modules
 from utils.job_queue import job_queue
 from utils.training_callback import RealTimeMetricsCallback
 from utils.aws_gpu_training import gpu_training_manager
+from services.model_versioning import model_versioning_service
 from config import settings
+import os
 from models.global_signature_classifier import GlobalSignatureClassifier
 from utils.s3_storage import create_presigned_get, download_bytes
 from utils.s3_storage import upload_model_file as upload_file_generic
@@ -131,7 +133,7 @@ async def _fetch_and_validate_student_images(student_ids: list[int]) -> dict[int
                     bucket["genuine_images"].append(arr)
                     accepted_g += 1
                 else:
-                    # Skip non-genuine images - owner identification only
+                    # Skip forged images - owner identification only
                     accepted_f += 1
             except Exception:
                 skipped += 1
@@ -178,7 +180,7 @@ async def _train_and_store_individual_from_arrays(student: dict, genuine_arrays:
                 arr = arr[0]
         return arr
     genuine_norm = [_normalize(a) for a in genuine_arrays]
-    # Only process genuine arrays for owner identification
+    # Skip forged arrays - owner identification only
     
     # Use student name for consistent mapping
     student_name = f"{student.get('firstname', '')} {student.get('surname', '')}".strip() or f"Student_{student['id']}"
@@ -216,15 +218,12 @@ async def _train_and_store_individual_from_arrays(student: dict, genuine_arrays:
             )
             logger.info("🚀 Using LOCAL storage (no S3 upload - INSTANT!)")
         else:
-            # Use S3 storage for model upload
-            uploaded_files = {}
-            for model_name, model_data in local_manager.models.items():
-                s3_key, s3_url = upload_model_file(
-                    model_data,
-                    "individual",
-                    model_uuid
-                )
-                uploaded_files[model_name] = {"url": s3_url, "key": s3_key}
+            # Use optimized S3 saving with parallel uploads
+            uploaded_files = save_signature_models_optimized(
+                local_manager, 
+                "individual", 
+                model_uuid
+            )
             logger.info("☁️ Using S3 storage with parallel uploads")
         
         # Extract URLs and keys from uploaded files
@@ -238,17 +237,14 @@ async def _train_and_store_individual_from_arrays(student: dict, genuine_arrays:
         logger.info(f"✅ Individual model {model_uuid} saved with optimized S3 saving")
         
     except Exception as e:
-        logger.warning(f"S3 storage failed: {e}")
+        logger.warning(f"Optimized S3 saving failed, trying direct method: {e}")
         try:
             # Fallback to direct S3 saving
-            uploaded_files = {}
-            for model_name, model_data in local_manager.models.items():
-                s3_key, s3_url = upload_model_file(
-                    model_data,
-                    "individual",
-                    model_uuid
-                )
-                uploaded_files[model_name] = {"url": s3_url, "key": s3_key}
+            uploaded_files = save_signature_models_directly(
+                local_manager, 
+                "individual", 
+                model_uuid
+            )
             
             # Extract URLs and keys from uploaded files
             s3_urls = {}
@@ -429,7 +425,8 @@ async def train_signature_model(student, genuine_data, job=None):
                 progress = 10.0 + (i + 1) / len(genuine_data) * 20.0
                 job_queue.update_job_progress(job.job_id, progress, f"Processing genuine signatures... {i+1}/{len(genuine_data)}")
 
-        # Only process genuine signatures for owner identification training
+        # Skip forged signature processing - not used for owner identification training
+        # (Forgery detection is disabled system-wide - focus on owner identification only)
 
         if job:
             job_queue.update_job_progress(job.job_id, 50.0, "Preparing training data with augmentation...")
@@ -463,8 +460,9 @@ async def train_signature_model(student, genuine_data, job=None):
         
         # Save models - choose between S3 or local storage
         try:
-            # Check if local storage is enabled (override with parameter)
-            use_local_storage = not use_s3_upload and os.getenv('USE_LOCAL_STORAGE', 'false').lower() == 'true'
+            # Configure storage behavior
+            use_s3_upload = os.getenv('USE_S3_UPLOAD', 'false').lower() == 'true'
+            use_local_storage = (not use_s3_upload) and (os.getenv('USE_LOCAL_STORAGE', 'false').lower() == 'true')
             
             if use_local_storage:
                 # Use local storage (INSTANT - no S3 upload)
@@ -476,15 +474,12 @@ async def train_signature_model(student, genuine_data, job=None):
                 )
                 logger.info("🚀 Using LOCAL storage (no S3 upload - INSTANT!)")
             else:
-                # Use S3 storage for model upload
-                uploaded_files = {}
-                for model_name, model_data in local_manager.models.items():
-                    s3_key, s3_url = upload_model_file(
-                        model_data,
-                        "individual",
-                        model_uuid
-                    )
-                    uploaded_files[model_name] = {"url": s3_url, "key": s3_key}
+                # Use optimized S3 saving with parallel uploads
+                uploaded_files = save_signature_models_optimized(
+                    local_manager, 
+                    "individual", 
+                    model_uuid
+                )
                 logger.info("☁️ Using S3 storage with parallel uploads")
             
             # Extract URLs and KEYS from uploaded files
@@ -498,17 +493,14 @@ async def train_signature_model(student, genuine_data, job=None):
             logger.info(f"✅ Main training model {model_uuid} saved with optimized S3 saving")
             
         except Exception as e:
-            logger.warning(f"S3 storage failed: {e}")
+            logger.warning(f"Optimized S3 saving failed, trying direct method: {e}")
             try:
                 # Fallback to direct S3 saving
-                uploaded_files = {}
-                for model_name, model_data in local_manager.models.items():
-                    s3_key, s3_url = upload_model_file(
-                        model_data,
-                        "individual",
-                        model_uuid
-                    )
-                    uploaded_files[model_name] = {"url": s3_url, "key": s3_key}
+                uploaded_files = save_signature_models_directly(
+                    local_manager, 
+                    "individual", 
+                    model_uuid
+                )
                 
                 # Extract URLs and KEYS from uploaded files
                 s3_urls = {}
@@ -660,66 +652,8 @@ async def start_training(
     student_id: str = Form(...),
     genuine_files: List[UploadFile] | None = File(None)
 ):
-    try:
-        student = await db_manager.get_student_by_school_id(student_id)
-        if not student:
-            try:
-                numeric_id = int(student_id)
-                student = await db_manager.get_student(numeric_id)
-            except Exception:
-                student = None
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-
-        genuine_data: List[bytes] = []
-        if genuine_files:  # Only need genuine files for owner identification
-            # Use uploaded files
-            if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
-                raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-            genuine_data = [await f.read() for f in genuine_files]
-        else:
-            # Auto-fetch stored signatures from DB/S3
-            rows = await db_manager.list_student_signatures(int(student["id"]))
-            if not rows:
-                raise HTTPException(status_code=400, detail="No stored signatures available for this student")
-            import requests
-            for r in rows:
-                url = r.get("s3_url")
-                label = (r.get("label") or "").lower()
-                key = r.get("s3_key") or _derive_s3_key_from_url(url)
-                # Prefer S3 download by key
-                data: bytes | None = None
-                if key:
-                    try:
-                        data = download_bytes(key)
-                    except Exception:
-                        data = None
-                if data is None:
-                    if settings.S3_USE_PRESIGNED_GET and key:
-                        try:
-                            url = create_presigned_get(key)
-                        except Exception:
-                            pass
-                    try:
-                        resp = requests.get(url, timeout=8)
-                        resp.raise_for_status()
-                        data = resp.content
-                    except Exception as e:
-                        logger.warning(f"HTTP fetch failed for student {student['id']} key={key}: {e}")
-                        continue
-                if label == "genuine":
-                    genuine_data.append(data)
-                # Only process genuine data for owner identification
-            if len(genuine_data) < settings.MIN_GENUINE_SAMPLES:
-                raise HTTPException(status_code=400, detail="Insufficient stored signatures to train (need more genuine samples)")
-
-        result = await train_signature_model(student, genuine_data)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error in training: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    # Individual training is disabled – global model only
+    raise HTTPException(status_code=400, detail="Individual training is disabled. Use global training with selected students.")
 
 @router.post("/start-gpu-training")
 async def start_gpu_training(
@@ -773,7 +707,7 @@ async def start_gpu_training(
                     raise HTTPException(status_code=400, detail="No stored signatures available for this student")
                 import requests
                 genuine_data = []
-                # Only process genuine data for owner identification
+                
                 for r in rows:
                     url = r.get("s3_url"); label = (r.get("label") or "").lower()
                     key = r.get("s3_key") or _derive_s3_key_from_url(url)
@@ -791,15 +725,13 @@ async def start_gpu_training(
                     if not content:
                         continue
                     if label == "genuine": genuine_data.append(content)
-                    # Only process genuine data for owner identification
+                    
                 if len(genuine_data) < settings.MIN_GENUINE_SAMPLES:
                     raise HTTPException(status_code=400, detail="Insufficient stored signatures to train (need more genuine samples)")
             else:
                 if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
                     raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-                # Only genuine samples required for owner identification
                 genuine_data = [await f.read() for f in genuine_files]
-                # Only process genuine files for owner identification
             
             if use_gpu and gpu_training_manager.is_available():
                 # Use GPU training
@@ -828,13 +760,11 @@ async def start_gpu_training(
             # For global GPU, allow auto-fetch when files are not provided
             if not genuine_files or len(genuine_files) == 0:  # Only need genuine files for owner identification
                 genuine_data = []
-                # Only process genuine data for owner identification
+                
             else:
                 if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
                     raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-                # Only genuine samples required for owner identification
                 genuine_data = [await f.read() for f in genuine_files]
-                # Only process genuine files for owner identification
             
             if use_gpu and gpu_training_manager.is_available():
                 asyncio.create_task(run_global_gpu_training(job, student_ids, genuine_data, use_s3_upload))
@@ -864,7 +794,8 @@ async def start_gpu_training(
 @router.post("/start-async")
 async def start_async_training(
     student_id: str = Form(...),
-    genuine_files: List[UploadFile] | None = File(None)
+    genuine_files: List[UploadFile] | None = File(None),
+    use_s3_upload: bool = Form(False)
 ):
     check_database_available()
     try:
@@ -891,7 +822,7 @@ async def start_async_training(
                     raise HTTPException(status_code=400, detail="No stored signatures available for this student")
                 import requests
                 genuine_data = []
-                # Only process genuine data for owner identification
+                
                 for r in rows:
                     url = r.get("s3_url"); label = (r.get("label") or "").lower()
                     key = r.get("s3_key") or _derive_s3_key_from_url(url)
@@ -909,15 +840,13 @@ async def start_async_training(
                     if not content:
                         continue
                     if label == "genuine": genuine_data.append(content)
-                    # Only process genuine data for owner identification
+                    
                 if len(genuine_data) < settings.MIN_GENUINE_SAMPLES:
                     raise HTTPException(status_code=400, detail="Insufficient stored signatures to train (need more genuine samples)")
             else:
                 if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
                     raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-                # Only genuine samples required for owner identification
                 genuine_data = [await f.read() for f in genuine_files]
-                # Only process genuine files for owner identification
             asyncio.create_task(run_async_training(job, student, genuine_data))
             return {"success": True, "job_id": job.job_id, "message": "Training job started", "stream_url": f"/api/progress/stream/{job.job_id}"}
         
@@ -928,13 +857,11 @@ async def start_async_training(
             # Support auto-fetch when files omitted (defer per-student fetch to run_global_async_training)
             if not genuine_files or len(genuine_files) == 0:  # Only need genuine files for owner identification
                 genuine_data = []
-                # Only process genuine data for owner identification
+                
             else:
                 if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
                     raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-                # Only genuine samples required for owner identification
                 genuine_data = [await f.read() for f in genuine_files]
-                # Only process genuine files for owner identification
             asyncio.create_task(run_global_async_training(job, student_ids, genuine_data, use_s3_upload))
             return {"success": True, "job_id": job.job_id, "message": "Global training job started", "stream_url": f"/api/progress/stream/{job.job_id}"}
             
@@ -1092,6 +1019,7 @@ async def run_gpu_training(job, student, genuine_data, use_s3_upload=False):
         # Process images
         genuine_images = []
         
+        
         for i, data in enumerate(genuine_data):
             image = Image.open(io.BytesIO(data))
             genuine_images.append(image)
@@ -1099,7 +1027,7 @@ async def run_gpu_training(job, student, genuine_data, use_s3_upload=False):
                 progress = 5.0 + (i + 1) / len(genuine_data) * 10.0
                 job_queue.update_job_progress(job.job_id, progress, f"Processing genuine images... {i+1}/{len(genuine_data)}")
 
-        # Only process genuine images for owner identification
+        
 
         # Prepare training data
         training_data = {
@@ -1128,28 +1056,12 @@ async def run_gpu_training(job, student, genuine_data, use_s3_upload=False):
             else:
                 accuracy = None
                 
-            model_record = await db_manager.create_trained_model({
-                "student_id": int(student["id"]),
-                "model_path": gpu_result['model_urls'].get('classification', ''),
-                "embedding_model_path": gpu_result['model_urls'].get('embedding', ''),
-                "status": "completed",
-                "sample_count": len(genuine_images),
-                "genuine_count": len(genuine_images),
-                "training_date": datetime.utcnow().isoformat(),
-                "accuracy": accuracy,  # Store GPU training accuracy
-                "training_metrics": {
-                    'model_type': 'ai_signature_verification_gpu',
-                    'architecture': 'signature_embedding_network',
-                    'training_method': 'aws_gpu_instance',
-                    'instance_type': 'g4dn.xlarge',
-                    'gpu_acceleration': True,
-                    'gpu_accuracy': gpu_accuracy
-                }
-            })
+            # Skip per-student writes; global-only system
+            model_record = None
 
             result = {
                 "success": True,
-                "model_id": model_record.get("id") if isinstance(model_record, dict) else None,
+                "model_id": None,
                 "model_uuid": job.job_id,
                 "training_samples": len(genuine_images),
                 "genuine_count": len(genuine_images),
@@ -1205,18 +1117,16 @@ async def run_global_gpu_training(job, student_ids, genuine_data, use_s3_upload=
 
         # Validate minimum totals across all selected students
         total_genuine = sum(len(v["genuine_images"]) for v in per_student.values())
+        
         if total_genuine < settings.MIN_GENUINE_SAMPLES:
             raise Exception("Insufficient stored signatures across selected students to train global model")
 
-        # Build training data structure for GPU service (owner identification only)
+        # Build training data: use unique student ID keys to avoid name collisions
         training_data = {}
         for s in students:
             sid = int(s["id"])  # type: ignore[index]
             bucket = per_student.get(sid, {"genuine_images": []})
-            # Use student name for consistent mapping
-            student_name = f"{s.get('firstname', '')} {s.get('surname', '')}".strip() or f"Student_{sid}"
-            # GlobalSignatureClassifier expects {student_name: [images]} format
-            training_data[student_name] = bucket["genuine_images"]  # Only genuine images for owner identification
+            training_data[str(sid)] = bucket["genuine_images"]  # Only genuine images for owner identification
 
         if job:
             job_queue.update_job_progress(job.job_id, 25.0, "Starting global GPU training...")
@@ -1323,10 +1233,8 @@ async def run_global_async_training(job, student_ids, genuine_data, use_s3_uploa
         for s in students:
             sid = int(s["id"])  # type: ignore[index]
             bucket = per_student.get(sid, {"genuine_images": []})
-            # Use student name for consistent mapping with GlobalSignatureClassifier
-            student_name = f"{s.get('firstname', '')} {s.get('surname', '')}".strip() or f"Student_{sid}"
-            # GlobalSignatureClassifier expects {student_name: [images]} format
-            training_data[student_name] = bucket['genuine_images']  # Only genuine images for owner identification
+            # Use unique student ID keys to avoid name collisions
+            training_data[str(sid)] = bucket['genuine_images']  # Only genuine images for owner identification
 
         if job:
             job_queue.update_job_progress(job.job_id, 80.0, "Training global model...")
@@ -1335,22 +1243,16 @@ async def run_global_async_training(job, student_ids, genuine_data, use_s3_uploa
         gsm = GlobalSignatureClassifier()
         history = gsm.train_global_model(training_data)
         
-        # Save global model directly to S3 (no local files)
+        # Save global model locally → upload → cleanup
         model_uuid = str(uuid.uuid4())
-        try:
-            from utils.direct_s3_saving import save_global_model_directly
-            s3_key, s3_url = save_global_model_directly(gsm, "global", model_uuid)
-            logger.info(f"✅ Global model {model_uuid} saved directly to S3")
-        except Exception as e:
-            logger.error(f"❌ Failed to save global model directly to S3: {e}")
-            # Fallback to local save → upload → cleanup
-            base_path = os.path.join(settings.LOCAL_MODELS_DIR, f"global_model_{model_uuid}")
-            os.makedirs(settings.LOCAL_MODELS_DIR, exist_ok=True)
-            gsm.save_model(f"{base_path}.keras")
-            with open(f"{base_path}.keras", 'rb') as f:
-                model_data = f.read()
-            s3_key, s3_url = upload_model_file(model_data, "global", f"global_{model_uuid}", "keras")
-            cleanup_local_file(f"{base_path}.keras")
+        base_path = os.path.join(settings.LOCAL_MODELS_DIR, f"global_model_{model_uuid}")
+        os.makedirs(settings.LOCAL_MODELS_DIR, exist_ok=True)
+        # gsm.save_model already appends .keras internally
+        gsm.save_model(base_path)
+        with open(f"{base_path}.keras", 'rb') as f:
+            model_data = f.read()
+        s3_key, s3_url = upload_model_file(model_data, "global", f"global_{model_uuid}", "keras")
+        cleanup_local_file(f"{base_path}.keras")
         
         # Compute and cache centroids for verification speed
         try:
@@ -1362,6 +1264,13 @@ async def run_global_async_training(job, student_ids, genuine_data, use_s3_uploa
             ckey, curl = None, None
 
         # Store global model record in dedicated global table
+        # Convert history (dict) into final metrics safely
+        h = history or {}
+        final_acc = float(h.get('accuracy', [0])[-1]) if h.get('accuracy') else None
+        final_val_acc = float(h.get('val_accuracy', [0])[-1]) if h.get('val_accuracy') else None
+        final_loss = float(h.get('loss', [0])[-1]) if h.get('loss') else None
+        final_val_loss = float(h.get('val_loss', [0])[-1]) if h.get('val_loss') else None
+
         payload = {
             "model_path": s3_url,
             "s3_key": s3_key,
@@ -1371,14 +1280,14 @@ async def run_global_async_training(job, student_ids, genuine_data, use_s3_uploa
             "genuine_count": int(total_genuine),
             "student_count": len(students),
             "training_date": datetime.utcnow().isoformat(),
-            "accuracy": float(history.history.get('accuracy', [0])[-1]) if history.history.get('accuracy') else None,
+            "accuracy": final_acc,
             "training_metrics": {
                 'model_type': 'global_multi_student',
-                'final_accuracy': float(history.history.get('accuracy', [0])[-1]) if history.history.get('accuracy') else None,
-                'final_loss': float(history.history.get('loss', [0])[-1]) if history.history.get('loss') else None,
-                'epochs_trained': len(history.history.get('accuracy', [])),
-                'val_accuracy': float(history.history.get('val_accuracy', [0])[-1]) if history.history.get('val_accuracy') else None,
-                'val_loss': float(history.history.get('val_loss', [0])[-1]) if history.history.get('val_loss') else None
+                'final_accuracy': final_acc,
+                'final_loss': final_loss,
+                'epochs_trained': len(h.get('accuracy', [])),
+                'val_accuracy': final_val_acc,
+                'val_loss': final_val_loss
             }
         }
         if curl:
@@ -1406,7 +1315,7 @@ async def run_global_async_training(job, student_ids, genuine_data, use_s3_uploa
         
         # Hybrid: also train and store individual models from the already preprocessed arrays (before completing job)
         individual_count = 0
-        logger.info(f"Starting individual training for {len(students)} students")
+        # Individual training disabled
         # GLOBAL TRAINING ONLY - No individual training
         if job:
             job_queue.update_job_progress(job.job_id, 100.0, "Global training completed successfully!")
@@ -1448,34 +1357,4 @@ async def get_latest_global_model():
         raise
     except Exception as e:
         logger.error(f"Error getting latest global model: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/job-progress/{job_id}")
-async def get_job_progress(job_id: str):
-    """Get real-time progress for a training job."""
-    try:
-        job = job_queue.get_job(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        # Format the response for the frontend
-        response = {
-            "job_id": job.job_id,
-            "status": job.status.value,
-            "progress": job.progress,
-            "current_stage": job.current_stage,
-            "estimated_time_remaining": job.estimated_time_remaining,
-            "start_time": job.start_time.isoformat() if job.start_time else None,
-            "end_time": job.end_time.isoformat() if job.end_time else None,
-            "error": job.error,
-            "result": job.result,
-            "training_metrics": job.training_metrics
-        }
-        
-        return response
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting job progress: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
