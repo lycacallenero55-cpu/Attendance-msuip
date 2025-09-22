@@ -652,66 +652,8 @@ async def start_training(
     student_id: str = Form(...),
     genuine_files: List[UploadFile] | None = File(None)
 ):
-    try:
-        student = await db_manager.get_student_by_school_id(student_id)
-        if not student:
-            try:
-                numeric_id = int(student_id)
-                student = await db_manager.get_student(numeric_id)
-            except Exception:
-                student = None
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-
-        genuine_data: List[bytes] = []
-        if genuine_files:  # Only need genuine files for owner identification
-            # Use uploaded files
-            if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
-                raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-            genuine_data = [await f.read() for f in genuine_files]
-        else:
-            # Auto-fetch stored signatures from DB/S3
-            rows = await db_manager.list_student_signatures(int(student["id"]))
-            if not rows:
-                raise HTTPException(status_code=400, detail="No stored signatures available for this student")
-            import requests
-            for r in rows:
-                url = r.get("s3_url")
-                label = (r.get("label") or "").lower()
-                key = r.get("s3_key") or _derive_s3_key_from_url(url)
-                # Prefer S3 download by key
-                data: bytes | None = None
-                if key:
-                    try:
-                        data = download_bytes(key)
-                    except Exception:
-                        data = None
-                if data is None:
-                    if settings.S3_USE_PRESIGNED_GET and key:
-                        try:
-                            url = create_presigned_get(key)
-                        except Exception:
-                            pass
-                    try:
-                        resp = requests.get(url, timeout=8)
-                        resp.raise_for_status()
-                        data = resp.content
-                    except Exception as e:
-                        logger.warning(f"HTTP fetch failed for student {student['id']} key={key}: {e}")
-                        continue
-                if label == "genuine":
-                    genuine_data.append(data)
-                # Skip forged data - owner identification only
-            if len(genuine_data) < settings.MIN_GENUINE_SAMPLES:
-                raise HTTPException(status_code=400, detail="Insufficient stored signatures to train (need more genuine samples)")
-
-        result = await train_signature_model(student, genuine_data)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error in training: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    # Deprecated: single-student training is disabled. Use global training endpoints.
+    raise HTTPException(status_code=410, detail="This endpoint is deprecated. Use /api/training/start-async or /api/training/start-gpu-training with one or more students for global training.")
 
 @router.post("/start-gpu-training")
 async def start_gpu_training(
@@ -746,73 +688,16 @@ async def start_gpu_training(
         student_ids = [sid.strip() for sid in student_id.split(',') if sid.strip()]
         
         if len(student_ids) == 1:
-            # Single student training
-            student = await db_manager.get_student_by_school_id(student_ids[0])
-            if not student:
-                try:
-                    numeric_id = int(student_ids[0])
-                    student = await db_manager.get_student(numeric_id)
-                except Exception:
-                    student = None
-            if not student:
-                raise HTTPException(status_code=404, detail="Student not found")
-
-            job = job_queue.create_job(int(student["id"]), "gpu_training")
-            # If no files uploaded, auto-fetch from storage
-            if not genuine_files or len(genuine_files) == 0:  # Only need genuine files for owner identification
-                rows = await db_manager.list_student_signatures(int(student["id"]))
-                if not rows:
-                    raise HTTPException(status_code=400, detail="No stored signatures available for this student")
-                import requests
-                genuine_data = []
-                # Skip forged data - owner identification only
-                for r in rows:
-                    url = r.get("s3_url"); label = (r.get("label") or "").lower()
-                    key = r.get("s3_key") or _derive_s3_key_from_url(url)
-                    content: bytes | None = None
-                    if key:
-                        try:
-                            content = download_bytes(key)
-                        except Exception:
-                            content = None
-                    if content is None and url:
-                        try:
-                            resp = requests.get(url, timeout=8); resp.raise_for_status(); content = resp.content
-                        except Exception:
-                            continue
-                    if not content:
-                        continue
-                    if label == "genuine": genuine_data.append(content)
-                    # Skip forged data - owner identification only
-                if len(genuine_data) < settings.MIN_GENUINE_SAMPLES:
-                    raise HTTPException(status_code=400, detail="Insufficient stored signatures to train (need more genuine samples)")
-            else:
-                if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
-                    raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-                # Forged samples not required since forgery detection is disabled - focus on owner identification only
-                genuine_data = [await f.read() for f in genuine_files]
-                # Skip forged files - owner identification only
-            
-            if use_gpu and gpu_training_manager.is_available():
-                # Use GPU training
-                asyncio.create_task(run_gpu_training(job, student, genuine_data, use_s3_upload))
-                return {
-                    "success": True, 
-                    "job_id": job.job_id, 
-                    "message": "GPU training job started", 
-                    "stream_url": f"/api/progress/stream/{job.job_id}",
-                    "training_type": "gpu"
-                }
-            else:
-                # Use local CPU training
-                asyncio.create_task(run_async_training(job, student, genuine_data))
-                return {
-                    "success": True, 
-                    "job_id": job.job_id, 
-                    "message": "Local training job started", 
-                    "stream_url": f"/api/progress/stream/{job.job_id}",
-                    "training_type": "local"
-                }
+            # Force global path even for a single student
+            job = job_queue.create_job(0, "global_gpu_training")
+            asyncio.create_task(run_global_gpu_training(job, student_ids, [], use_s3_upload))
+            return {
+                "success": True,
+                "job_id": job.job_id,
+                "message": "Global GPU training job started",
+                "stream_url": f"/api/progress/stream/{job.job_id}",
+                "training_type": "global_gpu"
+            }
         
         else:
             # Multiple students - use global training
@@ -865,54 +750,10 @@ async def start_async_training(
         student_ids = [sid.strip() for sid in student_id.split(',') if sid.strip()]
         
         if len(student_ids) == 1:
-            # Single student training (original logic)
-            student = await db_manager.get_student_by_school_id(student_ids[0])
-            if not student:
-                try:
-                    numeric_id = int(student_ids[0])
-                    student = await db_manager.get_student(numeric_id)
-                except Exception:
-                    student = None
-            if not student:
-                raise HTTPException(status_code=404, detail="Student not found")
-
-            job = job_queue.create_job(int(student["id"]), "training")
-            # Allow auto-fetch when files are not uploaded
-            if not genuine_files or len(genuine_files) == 0:  # Only need genuine files for owner identification
-                rows = await db_manager.list_student_signatures(int(student["id"]))
-                if not rows:
-                    raise HTTPException(status_code=400, detail="No stored signatures available for this student")
-                import requests
-                genuine_data = []
-                # Skip forged data - owner identification only
-                for r in rows:
-                    url = r.get("s3_url"); label = (r.get("label") or "").lower()
-                    key = r.get("s3_key") or _derive_s3_key_from_url(url)
-                    content: bytes | None = None
-                    if key:
-                        try:
-                            content = download_bytes(key)
-                        except Exception:
-                            content = None
-                    if content is None and url:
-                        try:
-                            resp = requests.get(url, timeout=8); resp.raise_for_status(); content = resp.content
-                        except Exception:
-                            continue
-                    if not content:
-                        continue
-                    if label == "genuine": genuine_data.append(content)
-                    # Skip forged data - owner identification only
-                if len(genuine_data) < settings.MIN_GENUINE_SAMPLES:
-                    raise HTTPException(status_code=400, detail="Insufficient stored signatures to train (need more genuine samples)")
-            else:
-                if len(genuine_files) < settings.MIN_GENUINE_SAMPLES:
-                    raise HTTPException(status_code=400, detail=f"Minimum {settings.MIN_GENUINE_SAMPLES} genuine samples required")
-                # Forged samples not required since forgery detection is disabled - focus on owner identification only
-                genuine_data = [await f.read() for f in genuine_files]
-                # Skip forged files - owner identification only
-            asyncio.create_task(run_async_training(job, student, genuine_data))
-            return {"success": True, "job_id": job.job_id, "message": "Training job started", "stream_url": f"/api/progress/stream/{job.job_id}"}
+            # Force global path even for a single student
+            job = job_queue.create_job(0, "global_training")
+            asyncio.create_task(run_global_async_training(job, student_ids, [], use_s3_upload))
+            return {"success": True, "job_id": job.job_id, "message": "Global training job started", "stream_url": f"/api/progress/stream/{job.job_id}"}
         
         else:
             # Multiple students - use global training
