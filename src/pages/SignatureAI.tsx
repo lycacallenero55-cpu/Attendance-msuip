@@ -2101,6 +2101,5 @@ const SignatureAI = () => {
     </Layout>
   );
 };
-}
 
 export default SignatureAI;
